@@ -2,8 +2,8 @@ import { Client, ChannelType, TextChannel, ForumChannel, Message } from 'discord
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { SyncService } from '../services/SyncService.ts';
-import { GitHubSyncService } from '../services/GitHubSyncService.ts';
+import { SyncService } from '../services/supabaseSync';
+import { GitHubSyncService } from '../services/githubSync';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

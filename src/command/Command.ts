@@ -14,7 +14,7 @@ export class CommandHandler {
 
     constructor() {
         this.commands = new Collection();
-        this.prefix = '/';
+        this.prefix = '부스터';
     }
 
     async initialize() {

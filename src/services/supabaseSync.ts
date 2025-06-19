@@ -173,14 +173,6 @@ export class SyncService {
         const isHealthy = await this.healthCheck();
         if (isHealthy) {
             console.log('✅ API 서버 연결 성공');
-            
-            const stats = await this.getStats();
-            if (stats) {
-                console.log('📊 현재 통계:');
-                console.log(`  • 총 포스트: ${stats.totalPosts}개`);
-                console.log(`  • 총 메시지: ${stats.totalMessages}개`);
-                console.log(`  • 총 채널: ${stats.totalChannels}개`);
-            }
         } else {
             console.log('❌ API 서버 연결 실패');
         }

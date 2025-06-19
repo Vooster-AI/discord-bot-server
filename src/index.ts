@@ -1,6 +1,6 @@
 import { Client, GatewayIntentBits, Partials } from 'discord.js';
-import { CommandHandler } from './command/Command.ts';
-import { ForumMonitor } from './forum/forum.ts';
+import { CommandHandler } from './command/Command';
+import { ForumMonitor } from './forum/Forum';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
@@ -41,7 +41,7 @@ let forumMonitor: ForumMonitor;
     // 준비
     client.on('ready', () => {
         console.log(`${client.user?.tag} 에 로그인됨`);
-        console.log(`포럼 모니터링 중인 채널: ${forumMonitor.getMonitoredChannels().length}개`);
+        console.log(`모니터링 중인 채널: ${forumMonitor.getMonitoredChannels().length}개`);
     });
 
     // 메세지 
