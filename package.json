@@ -1,0 +1,35 @@
+{
+  "name": "discord-bot",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "npx tsx src/index.ts",
+    "server": "npx tsx src/server/app.ts",
+    "db:migrate": "npx prisma migrate dev",
+    "db:generate": "npx prisma generate",
+    "db:studio": "npx prisma studio"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.10.1",
+    "@supabase/supabase-js": "^2.50.0",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
+    "@types/morgan": "^1.9.10",
+    "axios": "^1.10.0",
+    "cors": "^2.8.5",
+    "discord.js": "^14.0.0",
+    "dotenv": "^16.0.0",
+    "express": "^5.1.0",
+    "helmet": "^8.1.0",
+    "morgan": "^1.10.0",
+    "prisma": "^6.10.1",
+    "tsx": "^4.20.3"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "ts-node": "^10.0.0",
+    "typescript": "^5.0.0"
+  }
+}

@@ -1,0 +1,91 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Guild {
+  id          String @id
+  name        String
+  iconUrl     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  forumChannels ForumChannel[]
+  
+  @@map("guilds")
+}
+
+model ForumChannel {
+  id          String @id
+  name        String
+  description String?
+  guildId     String
+  position    Int?
+  topic       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  guild       Guild @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  posts       ForumPost[]
+  
+  @@map("forum_channels")
+}
+
+model ForumPost {
+  id              String @id
+  title           String
+  content         String?
+  authorId        String
+  authorName      String
+  authorAvatar    String?
+  channelId       String
+  guildId         String
+  messageCount    Int @default(1)
+  isLocked        Boolean @default(false)
+  isPinned        Boolean @default(false)
+  tags            String[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  lastMessageAt   DateTime @default(now())
+  
+  channel         ForumChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  messages        ForumMessage[]
+  
+  @@map("forum_posts")
+}
+
+model ForumMessage {
+  id            String @id
+  content       String
+  authorId      String
+  authorName    String
+  authorAvatar  String?
+  postId        String
+  guildId       String
+  editedAt      DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  post          ForumPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  
+  @@map("forum_messages")
+}
+
+model SyncLog {
+  id          Int @id @default(autoincrement())
+  action      String  // 'post_created', 'message_created', 'post_updated', etc.
+  discordId   String
+  success     Boolean
+  error       String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  
+  @@map("sync_logs")
+}

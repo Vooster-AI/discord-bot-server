@@ -1,0 +1,36 @@
+{
+  "monitoring": {
+    "enabled": true,
+    "forumChannels": [
+      {
+        "id": "1383077201498345492",
+        "name": "일반 포럼",
+        "description": "일반적인 질문과 답변을 위한 포럼",
+        "table": "Questions"
+      },
+      {
+        "id": "9876543210987654321", 
+        "name": "개발 포럼",
+        "description": "개발 관련 토론을 위한 포럼",
+        "table": "Suggestions"
+      },
+      {
+        "id": "실제_버그리포트_채널ID", 
+        "name": "버그 리포트",
+        "description": "버그 신고를 위한 포럼",
+        "table": "Reports"
+      }
+    ]
+  },
+  "settings": {
+    "maxMessageLength": 1000,
+    "checkDelay": 1000
+  },
+  "supabase": {
+    "enabled": true,
+    "serverUrl": "http://localhost:3000"
+  },
+  "github": {
+    "enabled": true
+  }
+}
