@@ -57,17 +57,25 @@ GITHUB_REPOSITORY=owner/repository
 ]
 ```
 
-### 3. Supabase table 설정
+### 3. Supabase table 설정 (Questions, Reports, ...)
 
 
-| Name       | Format      | Role                       |
-|------------|-------------|--------|-------------------|
-| post_name  | text        | name of forum post         |
-| content    | text        | content of message         |
-| created_at | timestamptz | time message uploaded      |
-| details    | json        | source link, author, ...   |
-| github     | text        | github issue link          |
+| Name        | Format      | Role/Description               |
+|-------------|-------------|--------------------------------|
+| `post_name` | text        | Forum post title               |
+| `content`   | text        | Message content                |
+| `created_at`| timestamptz | Message creation timestamp     |
+| `details`   | json        | Metadata (author, link, etc.)  |
+| `github`    | text        | Linked GitHub issue URL        |
 
+### 4. Supabase table 설정 (Users)
+
+| Name        | Format | Role/Description                       |
+|-------------|--------|----------------------------------------|
+| `Nname`     | text   | Display name of the Discord user       |
+| `discord_id`| text   | Unique Discord user ID                 |
+| `score`     | int    | Score value assigned to the user       |
+| `scored_by` | text   | Discord ID of the user who gave score  |
 
 ## 🏃‍♂️ 실행
 
