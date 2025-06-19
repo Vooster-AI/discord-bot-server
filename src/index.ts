@@ -31,30 +31,22 @@ const client = new Client({
 let commandHandler: CommandHandler;
 let forumMonitor: ForumMonitor;
 
-// CommandHandler 및 ForumMonitor 초기화
-(async () => {
-    commandHandler = await new CommandHandler().initialize();
+// 준비 이벤트 핸들러
+client.on('ready', async () => {
+    console.log(`${client.user?.tag} 에 로그인됨`);
+    
+    // CommandHandler 초기화 (클라이언트가 준비된 후)
+    commandHandler = await new CommandHandler(client).initialize();
     
     // ForumMonitor 초기화
     forumMonitor = new ForumMonitor(client);
     (client as any).forumMonitor = forumMonitor;
+    console.log(`모니터링 중인 채널: ${forumMonitor.getMonitoredChannels().length}개`);
     
-    // 준비
-    client.on('ready', () => {
-        console.log(`${client.user?.tag} 에 로그인됨`);
-        console.log(`모니터링 중인 채널: ${forumMonitor.getMonitoredChannels().length}개`);
-        
-        // Express 서버에 Discord 클라이언트 설정
-        setDiscordClient(client);
-        console.log('✅ Express 서버에 Discord 클라이언트 연결 완료');
-    });
+    // Express 서버에 Discord 클라이언트 설정
+    setDiscordClient(client);
+    console.log('✅ Express 서버에 Discord 클라이언트 연결 완료');
+});
 
-    // 메세지 
-    client.on('messageCreate', msg => {
-        if (commandHandler) {
-            commandHandler.handleMessage(client, msg);
-        }
-    });
-
-    client.login(token);
-})();  
+// 로그인
+client.login(token);  
