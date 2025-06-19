@@ -11,7 +11,6 @@ const __dirname = path.dirname(__filename);
 interface ForumChannelConfig {
     id: string;
     name: string;
-    description: string;
     table: string;
 }
 
@@ -430,7 +429,7 @@ export default {
                     if (channels.length === 0) {
                         msg.reply('모니터링 중인 포럼 채널이 없습니다.');
                     } else {
-                        const channelList = channels.map((ch: any) => `• **${ch.name}** (${ch.id})\n  ${ch.description}`).join('\n\n');
+                        const channelList = channels.map((ch: any) => `• **${ch.name}** (${ch.id})`).join('\n\n');
                         msg.reply(`모니터링 중인 포럼 채널 (${channels.length}개):\n\n${channelList}\n\n*콘솔 출력으로만 모니터링됩니다.*`);
                     }
                 } else {
