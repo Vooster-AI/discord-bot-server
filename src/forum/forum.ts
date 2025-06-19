@@ -1,4 +1,4 @@
-import { Client, ChannelType, TextChannel, ForumChannel, Message } from 'discord.js';
+import { Client, ChannelType, Message } from 'discord.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -12,6 +12,7 @@ interface ForumChannelConfig {
     id: string;
     name: string;
     table: string;
+    score: number;
 }
 
 interface ForumConfig {
@@ -76,6 +77,10 @@ export class ForumMonitor {
         } else {
             this.githubService.setEnabled(false);
         }
+    }
+
+    public setWebhookCallback(callback: (issueNumber: number, threadId: string) => void) {
+        this.githubService.setWebhookCallback(callback);
         
         console.log('👂 포럼 활동 모니터링 시작...\n');
     }
@@ -125,6 +130,10 @@ export class ForumMonitor {
         this.client.on('threadUpdate', async (oldThread: any, newThread: any) => {
             await this.handleThreadUpdate(oldThread, newThread);
         });
+
+        this.client.on('messageDelete', async (message: Message | any) => {
+            await this.handleMessageDelete(message);
+        });
     }
 
     private async handleMessage(message: Message) {
@@ -168,6 +177,12 @@ export class ForumMonitor {
                     } else {
                         console.log(`❌ ${forumChannelConfig.table} 테이블 Supabase 동기화 실패`);
                     }
+                }
+
+                // 유저 점수 저장
+                if (this.config.supabase?.enabled && forumChannelConfig && typeof forumChannelConfig.score === 'number') {
+                    console.log(`🏆 사용자 점수 저장 시도... (점수: ${forumChannelConfig.score})`);
+                    await this.saveUserScore(message, forumChannelConfig);
                 }
                 
                 this.logAlert(message);
@@ -411,6 +426,82 @@ export class ForumMonitor {
 
     public removeForumChannel(channelId: string) {
         this.forumChannelIds = this.forumChannelIds.filter(id => id !== channelId);
+    }
+
+    private async saveUserScore(message: Message, forumChannelConfig: ForumChannelConfig) {
+        try {
+            const scoreData = {
+                name: message.author.displayName || message.author.username,
+                discord_id: message.author.id,
+                score: forumChannelConfig.score,
+                scored_at: new Date().toISOString(),
+                scored_by: {
+                    post_name: (message.channel as any).name || 'Unknown',
+                    message_content: message.content.length > 500 ? message.content.substring(0, 500) + '...' : message.content,
+                    message_link: `https://discord.com/channels/${message.guild?.id}/${message.channel.id}/${message.id}`
+                }
+            };
+
+            const response = await fetch(`${this.config.supabase?.serverUrl}/api/users/score`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(scoreData)
+            });
+
+            if (response.ok) {
+                console.log(`✅ 사용자 점수 저장 성공: ${message.author.username} (+${forumChannelConfig.score}점)`);
+            } else {
+                const errorText = await response.text();
+                console.error(`❌ 사용자 점수 저장 실패:`, errorText);
+            }
+        } catch (error) {
+            console.error('❌ 사용자 점수 저장 중 오류:', error);
+        }
+    }
+
+    private async handleMessageDelete(message: Message) {
+        // 부분 메시지인 경우 처리
+        if (message.partial) {
+            try {
+                await message.fetch();
+            } catch (error) {
+                console.error('❌ 삭제된 메시지 정보를 가져올 수 없음:', error);
+                return;
+            }
+        }
+
+        // DM이나 봇 메시지는 무시
+        if (!message.guild || message.author?.bot) return;
+
+        // 포럼 채널의 스레드에서 온 메시지인지 확인
+        if (message.channel.type === ChannelType.PublicThread && message.channel.parent) {
+            const parentChannel = message.channel.parent;
+            
+            // 부모 채널이 모니터링 대상 포럼 채널인지 확인
+            if (this.forumChannelIds.includes(parentChannel.id)) {
+                const forumChannelConfig = this.config.monitoring.forumChannels.find(ch => ch.id === parentChannel.id);
+                const timestamp = new Date().toLocaleString('ko-KR');
+                
+                console.log(`\n🗑️ [${timestamp}] 포럼 메시지 삭제 감지!`);
+                console.log(`📋 포럼: ${forumChannelConfig?.name || parentChannel.name} (${parentChannel.id})`);
+                console.log(`📝 포스트: ${message.channel.name}`);
+                console.log(`👤 작성자: ${message.author?.displayName || message.author?.username} (${message.author?.id})`);
+                console.log(`🆔 메시지 ID: ${message.id}`);
+                
+                // GitHub 댓글 삭제
+                if (this.config.github?.enabled && forumChannelConfig) {
+                    console.log(`🐙 GitHub 댓글 삭제 시도...`);
+                    const deleteSuccess = await this.githubService.deleteCommentForMessage(message.id);
+                    if (deleteSuccess) {
+                        console.log(`✅ GitHub 댓글 삭제 성공`);
+                    } else {
+                        console.log(`❌ GitHub 댓글 삭제 실패`);
+                    }
+                }
+            }
+        }
     }
 }
 

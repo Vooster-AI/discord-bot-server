@@ -1,6 +1,7 @@
 import { Client, GatewayIntentBits, Partials } from 'discord.js';
 import { CommandHandler } from './command/Command';
 import { ForumMonitor } from './forum/Forum';
+import { setDiscordClient } from './server/app';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
@@ -42,6 +43,10 @@ let forumMonitor: ForumMonitor;
     client.on('ready', () => {
         console.log(`${client.user?.tag} 에 로그인됨`);
         console.log(`모니터링 중인 채널: ${forumMonitor.getMonitoredChannels().length}개`);
+        
+        // Express 서버에 Discord 클라이언트 설정
+        setDiscordClient(client);
+        console.log('✅ Express 서버에 Discord 클라이언트 연결 완료');
     });
 
     // 메세지 

@@ -7,6 +7,9 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { PrismaClient } from '@prisma/client';
 import { createClient } from '@supabase/supabase-js';
+import { Client } from 'discord.js';
+import { WebhookSyncService } from '../services/webhookSync';
+import * as fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,6 +24,35 @@ const supabase = createClient(
     process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
+// Discord client and webhook service will be injected
+let discordClient: Client | null = null;
+let webhookService: WebhookSyncService | null = null;
+
+// Discord client 설정 함수
+export function setDiscordClient(client: Client) {
+    discordClient = client;
+    
+    // forum-config.json 읽기
+    const configPath = path.join(__dirname, '../forum/forum-config.json');
+    try {
+        const configData = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+        webhookService = new WebhookSyncService(client, configData);
+        
+        // ForumMonitor에 웹훅 콜백 설정
+        const forumMonitor = (client as any).forumMonitor;
+        if (forumMonitor) {
+            forumMonitor.setWebhookCallback((issueNumber: number, threadId: string) => {
+                webhookService?.setIssueThreadMapping(issueNumber, threadId);
+            });
+            console.log('✅ ForumMonitor와 WebhookService 연결 완료');
+        }
+        
+        console.log('✅ WebhookSyncService 초기화 완료');
+    } catch (error) {
+        console.error('❌ WebhookSyncService 초기화 실패:', error);
+    }
+}
+
 // Middleware
 app.use(helmet());
 app.use(cors());
@@ -31,6 +63,113 @@ app.use(express.urlencoded({ extended: true }));
 // Health check
 app.get('/health', (req, res) => {
     res.json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
+// User score endpoint
+app.post('/api/users/score', async (req, res) => {
+    try {
+        const { name, discord_id, score, scored_at, scored_by } = req.body;
+        
+        if (!name || !discord_id || typeof score !== 'number' || !scored_at || !scored_by) {
+            return res.status(400).json({ error: 'Missing required fields: name, discord_id, score, scored_at, scored_by' });
+        }
+
+        // 기존 사용자 데이터 조회
+        const { data: existingUser, error: selectError } = await supabase
+            .from('Users')
+            .select('*')
+            .eq('discord_id', discord_id)
+            .single();
+
+        if (selectError && selectError.code !== 'PGRST116') { // PGRST116 = no rows found
+            console.error('Supabase select error:', selectError);
+            return res.status(500).json({ error: 'Database select failed', details: selectError.message });
+        }
+
+        const newLogEntry = {
+            post_name: scored_by.post_name,
+            message_content: scored_by.message_content,
+            message_link: scored_by.message_link,
+            scored_at: scored_at,
+            score: score
+        };
+
+        let result;
+        if (existingUser) {
+            // 기존 사용자: 점수 누적 및 로그 추가
+            const currentScore = existingUser.score || 0;
+            const currentLogs = Array.isArray(existingUser.scored_by) ? existingUser.scored_by : [];
+            
+            console.log(`📊 기존 사용자 업데이트: ${name} (현재 점수: ${currentScore}, 추가 점수: ${score})`);
+            console.log(`📝 현재 로그 수: ${currentLogs.length}`);
+            
+            const { data, error } = await supabase
+                .from('Users')
+                .update({
+                    name: name, // 이름 업데이트 (변경될 수 있음)
+                    score: currentScore + score,
+                    scored_by: [...currentLogs, newLogEntry]
+                })
+                .eq('discord_id', discord_id)
+                .select();
+
+            if (error) {
+                console.error('Supabase update error:', error);
+                return res.status(500).json({ error: 'Database update failed', details: error.message });
+            }
+            result = data;
+        } else {
+            // 새 사용자: 신규 생성
+            const { data, error } = await supabase
+                .from('Users')
+                .insert({
+                    name,
+                    discord_id,
+                    score,
+                    scored_by: [newLogEntry]
+                })
+                .select();
+
+            if (error) {
+                console.error('Supabase insert error:', error);
+                return res.status(500).json({ error: 'Database insert failed', details: error.message });
+            }
+            result = data;
+        }
+
+        res.json({ success: true, data: result });
+    } catch (error) {
+        console.error('Error saving user score:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// GitHub webhook endpoint
+app.post('/webhook/github', async (req, res) => {
+    try {
+        const event = req.headers['x-github-event'] as string;
+        const payload = req.body;
+        
+        console.log(`🔄 [WEBHOOK] GitHub 이벤트 수신: ${event}`);
+        
+        if (!webhookService) {
+            console.error('❌ [WEBHOOK] WebhookSyncService가 초기화되지 않음');
+            return res.status(500).json({ error: 'Webhook service not initialized' });
+        }
+
+        const success = await webhookService.handleGitHubWebhook(event, payload);
+        
+        if (success) {
+            console.log(`✅ [WEBHOOK] GitHub 이벤트 처리 완료: ${event}`);
+            res.status(200).json({ status: 'processed' });
+        } else {
+            console.log(`⚠️ [WEBHOOK] GitHub 이벤트 처리 실패 또는 무시: ${event}`);
+            res.status(200).json({ status: 'ignored' });
+        }
+    } catch (error) {
+        console.error('❌ GitHub 웹훅 처리 중 오류:', error);
+        res.status(500).json({ error: 'Webhook processing failed' });
+    }
 });
 
 // API Routes

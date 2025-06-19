@@ -30,6 +30,7 @@ export class GitHubSyncService {
     private token: string;
     private repository: string;
     private currentUser: string | null = null;
+    private webhookCallback: ((issueNumber: number, threadId: string) => void) | null = null;
 
     constructor(config: GitHubConfig) {
         this.config = config;
@@ -46,12 +47,58 @@ export class GitHubSyncService {
         this.config.enabled = enabled;
     }
 
+    public setWebhookCallback(callback: (issueNumber: number, threadId: string) => void) {
+        this.webhookCallback = callback;
+    }
+
     private getHeaders() {
         return {
             'Authorization': `token ${this.token}`,
             'Accept': 'application/vnd.github.v3+json',
             'User-Agent': 'Discord-Forum-Bot'
         };
+    }
+
+    public async deleteCommentForMessage(messageId: string): Promise<boolean> {
+        if (!this.config.enabled) {
+            console.log('📤 GitHub 동기화가 비활성화되어 있습니다.');
+            return false;
+        }
+
+        try {
+            const commentId = this.commentMap.get(messageId);
+            
+            if (!commentId) {
+                console.log(`⚠️ 메시지 ${messageId}에 해당하는 GitHub 댓글을 찾을 수 없습니다.`);
+                return false;
+            }
+
+            console.log(`🐙 [GITHUB DEBUG] 댓글 삭제 시도: 댓글 ID ${commentId}`);
+
+            const response = await axios.delete(
+                `${this.baseUrl}/repos/${this.repository}/issues/comments/${commentId}`,
+                { headers: this.getHeaders() }
+            );
+
+            if (response.status === 204) {
+                // 성공적으로 삭제된 경우 매핑에서 제거
+                this.commentMap.delete(messageId);
+                console.log(`✅ [GITHUB DEBUG] 댓글 삭제 성공 및 매핑 제거: 메시지 ${messageId} -> 댓글 ${commentId}`);
+                return true;
+            } else {
+                console.error(`❌ [GITHUB DEBUG] 댓글 삭제 실패: HTTP ${response.status}`);
+                return false;
+            }
+        } catch (error: any) {
+            if (error.response?.status === 404) {
+                // 댓글이 이미 삭제된 경우 매핑에서 제거
+                this.commentMap.delete(messageId);
+                console.log(`⚠️ [GITHUB DEBUG] 댓글이 이미 삭제됨: 매핑 제거 ${messageId}`);
+                return true;
+            }
+            console.error('❌ [GITHUB DEBUG] 댓글 삭제 중 오류:', error.response?.data || error.message);
+            return false;
+        }
     }
 
     public async createIssueForNewPost(message: Message, forumChannelName: string): Promise<string | null> {
@@ -95,6 +142,11 @@ ${message.content}
             
             // 스레드 ID와 이슈 번호 매핑 저장
             this.issueMap.set(thread.id, issue.number);
+            
+            // 웹훅 서비스에 매핑 정보 전달
+            if (this.webhookCallback) {
+                this.webhookCallback(issue.number, thread.id);
+            }
             
             console.log(`✅ GitHub 이슈 생성 완료: #${issue.number} - ${issue.html_url}`);
             return issue.html_url;
@@ -261,16 +313,28 @@ Closed on: ${new Date().toLocaleString('en-US')}
             let targetUrl: string;
             let targetType: string;
 
+            console.log(`🔍 [GITHUB DEBUG] 현재 댓글 매핑 상태:`);
+            console.log(`🔍 [GITHUB DEBUG] - 찾는 메시지 ID: ${messageId}`);
+            console.log(`🔍 [GITHUB DEBUG] - 매핑된 댓글 ID: ${commentId || 'None'}`);
+            console.log(`🔍 [GITHUB DEBUG] - 전체 댓글 매핑 수: ${this.commentMap.size}`);
+            
+            // 디버깅을 위해 댓글 매핑 전체 출력 (최대 5개)
+            const mappingEntries = Array.from(this.commentMap.entries()).slice(0, 5);
+            mappingEntries.forEach(([msgId, cmtId]) => {
+                console.log(`🔍 [GITHUB DEBUG] - 매핑: ${msgId} -> ${cmtId}`);
+            });
+
             if (commentId) {
                 // 댓글에 반응 추가
                 targetUrl = `${this.baseUrl}/repos/${this.repository}/issues/comments/${commentId}/reactions`;
                 targetType = `댓글 #${commentId}`;
-                console.log(`🔍 [GITHUB DEBUG] 댓글 반응 대상: 메시지 ${messageId} -> 댓글 ${commentId}`);
+                console.log(`🎯 [GITHUB DEBUG] 댓글 반응 대상: 메시지 ${messageId} -> 댓글 ${commentId}`);
             } else {
                 // 이슈에 반응 추가 (첫 번째 메시지)
                 targetUrl = `${this.baseUrl}/repos/${this.repository}/issues/${issueNumber}/reactions`;
                 targetType = `이슈 #${issueNumber}`;
-                console.log(`🔍 [GITHUB DEBUG] 이슈 반응 대상: 첫 번째 메시지 -> 이슈 ${issueNumber}`);
+                console.log(`🎯 [GITHUB DEBUG] 이슈 반응 대상: 첫 번째 메시지 -> 이슈 ${issueNumber}`);
+                console.log(`⚠️ [GITHUB DEBUG] 댓글 매핑이 없는 이유: 첫 번째 메시지이거나 매핑이 손실됨`);
             }
 
             if (added) {
