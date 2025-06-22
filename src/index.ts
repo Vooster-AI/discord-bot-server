@@ -1,7 +1,5 @@
-import { Client, GatewayIntentBits, Partials } from 'discord.js';
-import { CommandHandler } from './command/Command';
-import { ForumMonitor } from './forum/Forum';
-import { setDiscordClient } from './server/app';
+import { startDiscordBot } from './login.js';
+import { app } from './server/app.js';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
@@ -11,42 +9,49 @@ const __dirname = path.dirname(__filename);
 
 // 상위 폴더의 .env 파일을 읽도록 설정
 dotenv.config({ path: path.join(__dirname, '../.env') });
-const token = process.env.DISCORD_TOKEN;
 
-const client = new Client({
-    intents: [
-        GatewayIntentBits.DirectMessages,
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildMessageReactions, // 반응 이벤트용
-    ],
-    partials: [
-        Partials.Channel,
-        Partials.Message,    // 캐시되지 않은 메시지용
-        Partials.Reaction,   // 캐시되지 않은 반응용
-    ],
-});
+async function startApplication() {
+    try {
+        console.log('🚀 애플리케이션 시작 중...');
+        
+        // Discord 봇과 Express 서버를 동시에 시작
+        const [discordClient] = await Promise.all([
+            startDiscordBot(),
+            startExpressServer()
+        ]);
+        
+        console.log('✅ 모든 서비스가 성공적으로 시작되었습니다.');
+        
+        // 종료 처리
+        process.on('SIGINT', async () => {
+            console.log('\n🔄 애플리케이션 종료 중...');
+            await discordClient.destroy();
+            process.exit(0);
+        });
+        
+    } catch (error) {
+        console.error('❌ 애플리케이션 시작 실패:', error);
+        process.exit(1);
+    }
+}
 
-let commandHandler: CommandHandler;
-let forumMonitor: ForumMonitor;
+function startExpressServer(): Promise<void> {
+    return new Promise((resolve, reject) => {
+        const PORT = process.env.PORT || 3000;
+        
+        const server = app.listen(PORT, () => {
+            console.log(`🚀 Express 서버가 포트 ${PORT}에서 실행 중`);
+            console.log(`📊 Health check: http://localhost:${PORT}/health`);
+            console.log(`📝 API docs: http://localhost:${PORT}/api`);
+            resolve();
+        });
+        
+        server.on('error', (error) => {
+            console.error('❌ Express 서버 시작 실패:', error);
+            reject(error);
+        });
+    });
+}
 
-// 준비 이벤트 핸들러
-client.on('ready', async () => {
-    console.log(`${client.user?.tag} 에 로그인됨`);
-    
-    // CommandHandler 초기화 (클라이언트가 준비된 후)
-    commandHandler = await new CommandHandler(client).initialize();
-    
-    // ForumMonitor 초기화
-    forumMonitor = new ForumMonitor(client);
-    (client as any).forumMonitor = forumMonitor;
-    console.log(`모니터링 중인 채널: ${forumMonitor.getMonitoredChannels().length}개`);
-    
-    // Express 서버에 Discord 클라이언트 설정
-    setDiscordClient(client);
-    console.log('✅ Express 서버에 Discord 클라이언트 연결 완료');
-});
-
-// 로그인
-client.login(token);  
+// 애플리케이션 시작
+startApplication();  

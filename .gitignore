@@ -2,3 +2,10 @@
 
 /src/generated/prisma
 .DS_Store
+
+# Data storage files
+/data/
+data/
+
+dist/
+node_modules/

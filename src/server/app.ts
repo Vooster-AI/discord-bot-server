@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url';
 import { PrismaClient } from '@prisma/client';
 import { createClient } from '@supabase/supabase-js';
 import { Client } from 'discord.js';
-import { WebhookSyncService } from '../services/webhookSync';
+import { WebhookSyncService } from '../services/webhookSync/index.js';
 import * as fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -20,8 +20,8 @@ dotenv.config({ path: path.join(__dirname, '../../.env') });
 const app = express();
 const prisma = new PrismaClient();
 const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
 // Discord client and webhook service will be injected
@@ -66,7 +66,7 @@ app.get('/health', (req, res) => {
 });
 
 // User score endpoint
-app.post('/api/users/score', async (req, res) => {
+app.post('/api/users/score', async (req: any, res: any) => {
     try {
         const { name, discord_id, score, scored_at, scored_by } = req.body;
         
@@ -137,15 +137,15 @@ app.post('/api/users/score', async (req, res) => {
             result = data;
         }
 
-        res.json({ success: true, data: result });
+        return res.json({ success: true, data: result });
     } catch (error) {
         console.error('Error saving user score:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        return res.status(500).json({ error: 'Internal server error' });
     }
 });
 
 // GitHub webhook endpoint
-app.post('/webhook/github', async (req, res) => {
+app.post('/webhook/github', async (req: any, res: any) => {
     try {
         const event = req.headers['x-github-event'] as string;
         const payload = req.body;
@@ -161,14 +161,14 @@ app.post('/webhook/github', async (req, res) => {
         
         if (success) {
             console.log(`✅ [WEBHOOK] GitHub 이벤트 처리 완료: ${event}`);
-            res.status(200).json({ status: 'processed' });
+            return res.status(200).json({ status: 'processed' });
         } else {
             console.log(`⚠️ [WEBHOOK] GitHub 이벤트 처리 실패 또는 무시: ${event}`);
-            res.status(200).json({ status: 'ignored' });
+            return res.status(200).json({ status: 'ignored' });
         }
     } catch (error) {
         console.error('❌ GitHub 웹훅 처리 중 오류:', error);
-        res.status(500).json({ error: 'Webhook processing failed' });
+        return res.status(500).json({ error: 'Webhook processing failed' });
     }
 });
 
@@ -267,7 +267,7 @@ app.get('/api/posts/:postId/messages', async (req, res) => {
 });
 
 // Supabase direct sync endpoint
-app.post('/api/sync/supabase', async (req, res) => {
+app.post('/api/sync/supabase', async (req: any, res: any) => {
     try {
         const { table, data } = req.body;
         
@@ -294,10 +294,10 @@ app.post('/api/sync/supabase', async (req, res) => {
         }
 
         console.log(`✅ Successfully inserted into ${table}:`, result);
-        res.json({ success: true, data: result });
+        return res.json({ success: true, data: result });
     } catch (error) {
         console.error('Error in Supabase sync:', error);
-        res.status(500).json({ error: 'Sync failed' });
+        return res.status(500).json({ error: 'Sync failed' });
     }
 });
 
@@ -559,13 +559,4 @@ app.use((req, res) => {
     res.status(404).json({ error: 'Not found' });
 });
 
-const PORT = process.env.PORT || 3000;
-
 export { app, prisma, supabase };
-
-// Start server
-app.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
-    console.log(`📊 Health check: http://localhost:${PORT}/health`);
-    console.log(`📝 API docs: http://localhost:${PORT}/api`);
-});

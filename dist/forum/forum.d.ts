@@ -2,8 +2,8 @@ import { Client } from 'discord.js';
 interface ForumChannelConfig {
     id: string;
     name: string;
-    description: string;
     table: string;
+    score: number;
 }
 interface ForumConfig {
     monitoring: {
@@ -18,22 +18,32 @@ interface ForumConfig {
         enabled: boolean;
         serverUrl: string;
     };
+    github?: {
+        enabled: boolean;
+    };
 }
 export declare class ForumMonitor {
     private client;
     private config;
     private forumChannelIds;
     private syncService;
+    private githubService;
     constructor(client: Client);
+    setWebhookCallback(callback: (issueNumber: number, threadId: string) => void): void;
     private loadConfig;
     private setupEventListeners;
     private handleMessage;
     private handleThreadCreate;
     private logAlert;
+    private handleReactionAdd;
+    private handleReactionRemove;
+    private handleThreadUpdate;
     getMonitoredChannels(): string[];
     getConfig(): ForumConfig;
     addForumChannel(channelId: string): void;
     removeForumChannel(channelId: string): void;
+    private saveUserScore;
+    private handleMessageDelete;
 }
 declare const _default: {
     name: string;

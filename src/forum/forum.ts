@@ -2,8 +2,8 @@ import { Client, ChannelType, Message } from 'discord.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { SyncService } from '../services/supabaseSync';
-import { GitHubSyncService } from '../services/githubSync';
+import { SyncService } from '../services/supabaseSync/index.js';
+import { GitHubSyncService } from '../services/githubSync/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -171,7 +171,7 @@ export class ForumMonitor {
                 // Supabase 동기화
                 if (this.config.supabase?.enabled && forumChannelConfig) {
                     console.log(`💾 ${forumChannelConfig.table} 테이블에 Supabase 동기화 시도...`);
-                    const syncSuccess = await this.syncService.syncForumMessage(message, forumChannelConfig.table, message.channel.name, githubUrl || undefined);
+                    const syncSuccess = await this.syncService.syncForumMessage(message as any, forumChannelConfig.table as any, message.channel.name, githubUrl || undefined);
                     if (syncSuccess) {
                         console.log(`✅ ${forumChannelConfig.table} 테이블 Supabase 동기화 성공`);
                     } else {
@@ -225,7 +225,7 @@ export class ForumMonitor {
                         // Supabase 동기화 (새 포스트)
                         if (this.config.supabase?.enabled && forumChannelConfig) {
                             console.log(`💾 ${forumChannelConfig.table} 테이블에 새 포스트 Supabase 동기화 시도...`);
-                            const syncSuccess = await this.syncService.syncForumPost(firstMessage, forumChannelConfig.table, true, githubUrl || undefined);
+                            const syncSuccess = await this.syncService.syncForumPost(firstMessage as any, forumChannelConfig.table as any, true, githubUrl || undefined);
                             if (syncSuccess) {
                                 console.log(`✅ ${forumChannelConfig.table} 테이블 새 포스트 Supabase 동기화 성공`);
                             } else {

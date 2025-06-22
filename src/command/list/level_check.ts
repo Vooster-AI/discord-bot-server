@@ -1,5 +1,5 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { supabase, LEVEL_DIVISOR } from '../../utils/supabase';
+import { supabase, LEVEL_DIVISOR } from '../../utils/supabase.js';
 
 export default {
     data: new SlashCommandBuilder()

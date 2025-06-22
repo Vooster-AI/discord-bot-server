@@ -1,9 +1,11 @@
+import { Collection, Client } from 'discord.js';
 export declare class CommandHandler {
-    commands: any;
-    prefix: string;
-    constructor();
+    commands: Collection<string, any>;
+    client: Client;
+    constructor(client: Client);
     initialize(): Promise<this>;
     loadCommands(): Promise<void>;
-    handleMessage(client: any, msg: any): void;
+    registerSlashCommands(): Promise<void>;
+    setupInteractionHandler(): void;
 }
 //# sourceMappingURL=Command.d.ts.map

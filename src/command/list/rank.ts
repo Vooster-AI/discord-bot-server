@@ -1,5 +1,5 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { supabase, LEVEL_DIVISOR } from '../../utils/supabase';
+import { supabase, LEVEL_DIVISOR } from '../../utils/supabase.js';
 
 const getRankEmoji = (rank: number): string => {
     switch (rank) {

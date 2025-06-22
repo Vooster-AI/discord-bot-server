@@ -175,7 +175,7 @@ ${message.content}
             // 메모리에 이슈 번호가 없으면 GitHub에서 검색
             if (!issueNumber) {
                 console.log(`🔍 스레드 ${thread.id}에 해당하는 GitHub 이슈를 검색 중...`);
-                issueNumber = await this.findExistingIssue(thread.id, thread.name);
+                issueNumber = await this.findExistingIssue(thread.id, thread.name) ?? undefined;
                 
                 if (!issueNumber) {
                     console.log(`❌ 스레드 "${thread.name}"에 해당하는 GitHub 이슈를 찾을 수 없습니다.`);
@@ -285,7 +285,7 @@ Closed on: ${new Date().toLocaleString('en-US')}
             // 메모리에 이슈 번호가 없으면 GitHub에서 검색
             if (!issueNumber && threadName) {
                 console.log(`🔍 [GITHUB DEBUG] 메모리에 이슈 없음. GitHub에서 검색 시도: "${threadName}"`);
-                issueNumber = await this.findExistingIssue(threadId, threadName);
+                issueNumber = await this.findExistingIssue(threadId, threadName) ?? undefined;
                 
                 if (issueNumber) {
                     console.log(`✅ [GITHUB DEBUG] GitHub에서 이슈 찾음: #${issueNumber}`);
