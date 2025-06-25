@@ -101,12 +101,12 @@ export class GitHubSyncService {
         return await this.client.testConnection();
     }
 
-    public getIssueNumber(threadId: string): number | undefined {
-        return this.mappingManager.getIssueNumber(threadId);
+    public async getIssueNumber(threadId: string): Promise<number | undefined> {
+        return await this.mappingManager.getIssueNumber(threadId);
     }
 
-    public setIssueMapping(threadId: string, issueNumber: number): void {
-        this.mappingManager.setIssueMapping(threadId, issueNumber);
+    public async setIssueMapping(threadId: string, issueNumber: number): Promise<void> {
+        await this.mappingManager.setIssueMapping(threadId, issueNumber);
     }
 
     public async ensureIssueExists(threadId: string, threadName: string, forumChannelName: string): Promise<number | null> {
@@ -115,7 +115,7 @@ export class GitHubSyncService {
         }
 
         // 먼저 기존 이슈가 있는지 확인
-        let issueNumber: number | undefined = this.mappingManager.getIssueNumber(threadId) || undefined;
+        let issueNumber: number | undefined = await this.mappingManager.getIssueNumber(threadId) || undefined;
         
         if (!issueNumber) {
             // 매핑에 없으면 GitHub에서 검색
@@ -146,7 +146,7 @@ export class GitHubSyncService {
                         // 새 이슈 생성
                         const issueUrl = await this.issueManager.createIssueForNewPost(firstMessage, forumChannelName);
                         if (issueUrl) {
-                            const newIssueNumber = this.mappingManager.getIssueNumber(threadId);
+                            const newIssueNumber = await this.mappingManager.getIssueNumber(threadId);
                             if (newIssueNumber) {
                                 issueNumber = newIssueNumber;
                                 console.log(`✅ 자동 이슈 생성 완료: #${issueNumber}`);

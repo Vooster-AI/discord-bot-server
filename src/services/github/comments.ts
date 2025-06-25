@@ -65,7 +65,7 @@ export class CommentManager {
                         
                         if (issueUrl) {
                             // 새로 생성된 이슈 번호 가져오기
-                            issueNumber = this.mappingManager.getIssueNumber(thread.id);
+                            issueNumber = await this.mappingManager.getIssueNumber(thread.id);
                             console.log(`✅ 자동 이슈 생성 완료: 이슈 #${issueNumber}`);
                         }
                     } else {

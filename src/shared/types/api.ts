@@ -1,4 +1,4 @@
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 
 // Common API types
 export interface ApiResponse<T = any> {
@@ -19,7 +19,7 @@ export interface CustomRequest extends Request {
     discordClient?: any;
 }
 
-export type AsyncHandler = (req: CustomRequest, res: Response) => Promise<Response | void>;
+export type AsyncHandler = (req: CustomRequest, res: Response, next?: NextFunction) => Promise<Response | void>;
 
 // User related types
 export interface CreateUserRequest {

@@ -1,9 +1,6 @@
-import { PrismaClient } from '@prisma/client';
 import { supabase } from '../../shared/utils/supabase.js';
 import { CreateUserRequest, UserResponse } from '../../shared/types/api.js';
 import { ensureDiscordIdString } from '../../api/middlewares/validation.js';
-
-const prisma = new PrismaClient();
 
 export interface CreateUserData {
   discordId: string;
@@ -26,7 +23,7 @@ export interface ScoreData {
  */
 export class UserService {
   /**
-   * Get or create user using Prisma with Supabase fallback
+   * Get or create user using Supabase only
    */
   static async getOrCreateUser(userData: CreateUserData): Promise<{ 
     id: string; 
@@ -36,59 +33,114 @@ export class UserService {
     avatarUrl?: string | null 
   }> {
     try {
-      // Try to find existing user
-      const existingUser = await prisma.user.findUnique({
-        where: { discordId: userData.discordId }
-      });
+      // Try to find existing user in Supabase
+      const { data: existingUser, error: selectError } = await supabase
+        .from('Users')
+        .select('*')
+        .eq('discord_id::text', userData.discordId)
+        .single();
+
+      if (selectError && selectError.code !== 'PGRST116') {
+        throw new Error(`Database select failed: ${selectError.message}`);
+      }
 
       if (existingUser) {
         // Update user info if it has changed
-        const updatedUser = await prisma.user.update({
-          where: { id: existingUser.id },
-          data: {
-            username: userData.username,
-            displayName: userData.displayName,
-            avatarUrl: userData.avatarUrl,
-            updatedAt: new Date()
-          }
-        });
-        return updatedUser;
+        const { data: updatedUser, error: updateError } = await supabase
+          .from('Users')
+          .update({
+            name: userData.username,
+            avatar_url: userData.avatarUrl
+          })
+          .eq('discord_id::text', userData.discordId)
+          .select()
+          .single();
+
+        if (updateError) {
+          throw new Error(`User update failed: ${updateError.message}`);
+        }
+
+        return {
+          id: updatedUser.id.toString(),
+          discordId: updatedUser.discord_id,
+          username: updatedUser.name,
+          displayName: updatedUser.name,
+          avatarUrl: updatedUser.avatar_url
+        };
       }
 
       // Create new user
-      const newUser = await prisma.user.create({
-        data: {
-          discordId: userData.discordId,
-          username: userData.username,
-          displayName: userData.displayName,
-          avatarUrl: userData.avatarUrl
-        }
-      });
+      const { data: newUser, error: insertError } = await supabase
+        .from('Users')
+        .insert({
+          discord_id: userData.discordId,
+          name: userData.username,
+          score: 0,
+          scored_by: [],
+          avatar_url: userData.avatarUrl
+        })
+        .select()
+        .single();
+
+      if (insertError) {
+        throw new Error(`User creation failed: ${insertError.message}`);
+      }
 
       console.log(`✅ Created new user: ${userData.username} (${userData.discordId})`);
-      return newUser;
+      return {
+        id: newUser.id.toString(),
+        discordId: newUser.discord_id,
+        username: newUser.name,
+        displayName: newUser.name,
+        avatarUrl: newUser.avatar_url
+      };
     } catch (error) {
-      console.error('❌ Prisma user operation failed, trying Supabase fallback:', error);
+      console.error('❌ Supabase user operation failed:', error);
       throw error;
     }
   }
 
   /**
-   * Add score to user using Prisma with Supabase fallback
+   * Add score to user using Supabase only
    */
-  static async addScoreToUser(userId: string, scoreData: ScoreData): Promise<void> {
+  static async addScoreToUser(discordId: string, scoreData: ScoreData): Promise<void> {
     try {
-      await prisma.scoreHistory.create({
-        data: {
-          userId,
-          score: scoreData.score,
-          postName: scoreData.postName,
-          messageContent: scoreData.messageContent,
-          messageLink: scoreData.messageLink,
-          scoredAt: scoreData.scoredAt
-        }
-      });
-      console.log(`✅ Added score ${scoreData.score} to user ${userId}`);
+      // Get current user data
+      const { data: existingUser, error: selectError } = await supabase
+        .from('Users')
+        .select('*')
+        .eq('discord_id::text', discordId)
+        .single();
+
+      if (selectError) {
+        throw new Error(`Failed to find user: ${selectError.message}`);
+      }
+
+      const currentScore = existingUser.score || 0;
+      const currentLogs = existingUser.scored_by || [];
+      
+      const newLogEntry = {
+        score: scoreData.score,
+        scored_at: scoreData.scoredAt.toISOString(),
+        post_name: scoreData.postName,
+        message_content: scoreData.messageContent,
+        message_link: scoreData.messageLink
+      };
+
+      // Update user with new score and log entry
+      const { error: updateError } = await supabase
+        .from('Users')
+        .update({
+          score: currentScore + scoreData.score,
+          scored_by: [...currentLogs, newLogEntry]
+        })
+        .eq('discord_id::text', discordId);
+
+      if (updateError) {
+        throw new Error(`Score update failed: ${updateError.message}`);
+      }
+
+      console.log(`✅ Added score ${scoreData.score} to user ${discordId}`);
     } catch (error) {
       console.error('❌ Error adding score to user:', error);
       throw error;
@@ -98,13 +150,20 @@ export class UserService {
   /**
    * Get user's total score
    */
-  static async getUserTotalScore(userId: string): Promise<number> {
+  static async getUserTotalScore(discordId: string): Promise<number> {
     try {
-      const result = await prisma.scoreHistory.aggregate({
-        where: { userId },
-        _sum: { score: true }
-      });
-      return result._sum.score || 0;
+      const { data: user, error } = await supabase
+        .from('Users')
+        .select('score')
+        .eq('discord_id::text', discordId)
+        .single();
+
+      if (error) {
+        console.error('❌ Error getting user total score:', error);
+        return 0;
+      }
+
+      return user?.score || 0;
     } catch (error) {
       console.error('❌ Error getting user total score:', error);
       return 0;
@@ -112,13 +171,13 @@ export class UserService {
   }
 
   /**
-   * Create or update user score using the new unified approach
+   * Create or update user score using Supabase only
    */
   static async createOrUpdateUserScore(userData: CreateUserRequest): Promise<UserResponse> {
     const discordIdStr = ensureDiscordIdString(userData.discord_id);
     
     try {
-      // Try using the new User table first
+      // Get or create user
       const user = await this.getOrCreateUser({
         discordId: discordIdStr,
         username: userData.name,
@@ -126,7 +185,8 @@ export class UserService {
         avatarUrl: userData.avatar_url
       });
 
-      await this.addScoreToUser(user.id, {
+      // Add score to user
+      await this.addScoreToUser(discordIdStr, {
         score: userData.score,
         postName: userData.scored_by.post_name,
         messageContent: userData.scored_by.message_content,
@@ -139,72 +199,12 @@ export class UserService {
         discord_id: user.discordId,
         name: user.username
       };
-    } catch (dbError) {
-      console.error('❌ Database error, falling back to Supabase:', dbError);
-      return await this.fallbackSupabaseUserOperation(userData, discordIdStr);
+    } catch (error) {
+      console.error('❌ Failed to create or update user score:', error);
+      throw error;
     }
   }
 
-  /**
-   * Fallback to Supabase when Prisma fails
-   */
-  private static async fallbackSupabaseUserOperation(userData: CreateUserRequest, discordIdStr: string): Promise<UserResponse> {
-    const { data: existingUser, error: selectError } = await supabase
-      .from('Users')
-      .select('*')
-      .eq('discord_id::text', discordIdStr)
-      .single();
-
-    if (selectError && selectError.code !== 'PGRST116') {
-      throw new Error(`Database select failed: ${selectError.message}`);
-    }
-
-    const currentScore = existingUser?.score || 0;
-    const currentLogs = existingUser?.scored_by || [];
-    
-    const newLogEntry = {
-      score: userData.score,
-      scored_at: userData.scored_at,
-      post_name: userData.scored_by.post_name,
-      message_content: userData.scored_by.message_content,
-      message_link: userData.scored_by.message_link
-    };
-
-    if (existingUser) {
-      const { data, error } = await supabase
-        .from('Users')
-        .update({
-          name: userData.name,
-          score: currentScore + userData.score,
-          scored_by: [...currentLogs, newLogEntry]
-        })
-        .eq('discord_id::text', discordIdStr)
-        .select();
-
-      if (error) {
-        throw new Error(`Database update failed: ${error.message}`);
-      }
-
-      return data[0];
-    } else {
-      const { data, error } = await supabase
-        .from('Users')
-        .insert({
-          discord_id: discordIdStr,
-          name: userData.name,
-          score: userData.score,
-          scored_by: [newLogEntry],
-          avatar_url: userData.avatar_url
-        })
-        .select();
-
-      if (error) {
-        throw new Error(`Database insert failed: ${error.message}`);
-      }
-
-      return data[0];
-    }
-  }
 
   /**
    * Get users with pagination

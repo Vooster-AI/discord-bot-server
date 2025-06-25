@@ -1,5 +1,5 @@
 import { Client, ChannelType, Message, MessageReaction, User, PartialMessage, PartialMessageReaction, PartialUser } from 'discord.js';
-import { SyncService } from '../../services/supabaseSync/index.js';
+import { SyncService } from '../../services/database/syncService.js';
 import { GitHubSyncService } from '../../services/github/index.js';
 import { MessageSyncService } from '../../services/sync/messageSync.js';
 import { MessageService } from '../../core/services/MessageService.js';
@@ -47,7 +47,7 @@ export class ForumMonitor {
     private forumChannelIds: string[];
     
     // Core services
-    private syncService: SyncService;
+    // SyncService is now static, no need for instance
     private githubService: GitHubSyncService;
     private messageSyncService: MessageSyncService;
     
@@ -67,8 +67,8 @@ export class ForumMonitor {
         await this.loadConfig();
         this.forumChannelIds = this.config.monitoring.forumChannels.map(channel => channel.id);
         
-        // Initialize services
-        this.syncService = new SyncService(this.config.supabase?.serverUrl || 'http://localhost:3000');
+        // Initialize services - SyncService is now static
+        // SyncService is now static, no need to instantiate
         this.githubService = new GitHubSyncService({
             enabled: this.config.github?.enabled || false
         }, this.client);
@@ -77,7 +77,7 @@ export class ForumMonitor {
         this.messageService = new MessageService(
             this.forumChannelIds, 
             this.config, 
-            this.syncService, 
+            null, // syncService is now static, pass null
             this.githubService,
             this.scoreService
         );
@@ -160,11 +160,28 @@ export class ForumMonitor {
         // Supabase 동기화 (새 포스트)
         if (this.config.supabase?.enabled) {
             console.log(`💾 ${forumChannelConfig.table} 테이블에 새 포스트 Supabase 동기화 시도...`);
-            const syncSuccess = await this.syncService.syncForumPost(firstMessage as any, forumChannelConfig.table as any, true);
-            if (syncSuccess) {
+            try {
+                const syncData = {
+                    table: forumChannelConfig.table,
+                    postData: {
+                        title: firstMessage.channel.isThread() ? firstMessage.channel.name : 'New Post',
+                        content: firstMessage.content,
+                        details: {
+                            postId: firstMessage.id,
+                            messageId: firstMessage.id,
+                            authorId: firstMessage.author.id,
+                            authorName: firstMessage.author.displayName || firstMessage.author.username,
+                            channelId: firstMessage.channel.id,
+                            createdAt: firstMessage.createdAt.toISOString(),
+                            isNewPost: true
+                        }
+                    }
+                };
+                
+                await SyncService.syncPost(syncData);
                 console.log(`✅ ${forumChannelConfig.table} 테이블 새 포스트 Supabase 동기화 성공`);
-            } else {
-                console.log(`❌ ${forumChannelConfig.table} 테이블 새 포스트 Supabase 동기화 실패`);
+            } catch (error) {
+                console.log(`❌ ${forumChannelConfig.table} 테이블 새 포스트 Supabase 동기화 실패:`, error);
             }
         }
 
@@ -327,10 +344,7 @@ export class ForumMonitor {
         console.log(`💾 Supabase 동기화: ${supabaseStatus}`);
         if (this.config.supabase?.enabled) {
             console.log(`🔗 서버 URL: ${this.config.supabase.serverUrl}`);
-            this.syncService.setEnabled(true);
-            this.syncService.testConnection();
-        } else {
-            this.syncService.setEnabled(false);
+            // SyncService is now static, no need for instance methods
         }
 
         const githubStatus = this.config.github?.enabled ? '활성화' : '비활성화';

@@ -1,13 +1,4 @@
-import { PrismaClient } from '@prisma/client';
-import { createClient } from '@supabase/supabase-js';
-import * as fs from 'fs';
-import * as path from 'path';
-
-const prisma = new PrismaClient();
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { supabase } from './supabase.js';
 
 export interface ForumChannelConfig {
   id: string;
@@ -89,71 +80,19 @@ export async function getForumConfigFromSupabase(): Promise<any> {
   }
 }
 
-// Legacy functions for backward compatibility
-export async function migrateForumConfigToDatabase(configPath: string): Promise<void> {
-  try {
-    // Read the JSON config file
-    const configData = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-    
-    // Store each top-level config key as a separate record
-    for (const [key, value] of Object.entries(configData)) {
-      await prisma.forumConfig.upsert({
-        where: { key },
-        update: { value: JSON.stringify(value), updatedAt: new Date() },
-        create: {
-          key,
-          value: JSON.stringify(value),
-          description: `Migrated from forum-config.json - ${key} configuration`
-        }
-      });
-    }
-    
-    console.log('✅ Forum config migrated to database successfully');
-  } catch (error) {
-    console.error('❌ Error migrating forum config:', error);
-    console.log('⚠️  Using fallback: JSON file config');
-    throw error;
-  }
-}
+// Legacy function - deprecated, keeping for reference only
+// Forum configuration is now managed entirely through Supabase Forums table
 
 export async function getForumConfig(): Promise<any> {
   try {
-    // First try to get from Supabase Forums table
+    // Use Supabase Forums table as the single source of truth
     return await getForumConfigFromSupabase();
   } catch (supabaseError) {
-    console.log('⚠️  Supabase Forums table not available, trying local database...');
-    
-    try {
-      const configs = await prisma.forumConfig.findMany();
-      const configObject: any = {};
-      
-      for (const config of configs) {
-        try {
-          configObject[config.key] = JSON.parse(config.value);
-        } catch {
-          configObject[config.key] = config.value;
-        }
-      }
-      
-      return configObject;
-    } catch (error) {
-      console.error('Error getting forum config:', error);
-      throw error;
-    }
+    console.error('❌ Failed to load forum config from Supabase:', supabaseError);
+    console.log('💡 Please ensure Supabase Forums table is properly configured');
+    throw supabaseError;
   }
 }
 
-export async function updateForumConfig(key: string, value: any, description?: string): Promise<void> {
-  try {
-    await prisma.forumConfig.upsert({
-      where: { key },
-      update: { value: JSON.stringify(value), updatedAt: new Date(), description },
-      create: { key, value: JSON.stringify(value), description }
-    });
-    
-    console.log(`✅ Forum config updated: ${key}`);
-  } catch (error) {
-    console.error(`Error updating forum config ${key}:`, error);
-    throw error;
-  }
-}
+// Legacy function - forum config updates should be done through Supabase Forums table directly
+// This function is no longer used as configuration is managed through the Forums table

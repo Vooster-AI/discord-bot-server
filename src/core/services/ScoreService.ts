@@ -14,57 +14,15 @@ export interface ForumChannelConfig {
  * Service responsible for handling user scoring operations
  */
 export class ScoreService {
-    private serverUrl: string;
-
-    constructor(serverUrl: string) {
-        this.serverUrl = serverUrl;
+    // No longer needs serverUrl as we use direct UserService calls
+    constructor(serverUrl?: string) {
+        // Legacy parameter for backward compatibility
     }
 
     /**
-     * Save user score via API call
+     * Save user score using UserService directly (unified approach)
      */
     async saveUserScore(message: Message, forumChannelConfig: ForumChannelConfig): Promise<boolean> {
-        try {
-            const scoreData = {
-                nickname: message.author.displayName || null,
-                username: getDiscordFullName(message.author),
-                discord_id: message.author.id,
-                score: forumChannelConfig.score,
-                scored_at: new Date().toISOString(),
-                scored_by: {
-                    channel: message.channel.id,
-                    post_name: (message.channel as any).name || 'Unknown',
-                    message_content: message.content.length > 500 ? message.content.substring(0, 500) + '...' : message.content,
-                    message_link: `https://discord.com/channels/${message.guild?.id}/${message.channel.id}/${message.id}`
-                }
-            };
-
-            const response = await fetch(`${this.serverUrl}/api/users/score`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(scoreData)
-            });
-
-            if (response.ok) {
-                console.log(`✅ 사용자 점수 저장 성공: ${message.author.username} (+${forumChannelConfig.score}점)`);
-                return true;
-            } else {
-                const errorText = await response.text();
-                console.error(`❌ 사용자 점수 저장 실패:`, errorText);
-                return false;
-            }
-        } catch (error) {
-            console.error('❌ 사용자 점수 저장 중 오류:', error);
-            return false;
-        }
-    }
-
-    /**
-     * Save user score directly using UserService (for internal operations)
-     */
-    async saveUserScoreDirect(message: Message, forumChannelConfig: ForumChannelConfig): Promise<boolean> {
         try {
             const userData = {
                 discord_id: message.author.id,
@@ -80,11 +38,19 @@ export class ScoreService {
             };
 
             await UserService.createOrUpdateUserScore(userData);
-            console.log(`✅ 사용자 점수 직접 저장 성공: ${message.author.username} (+${forumChannelConfig.score}점)`);
+            console.log(`✅ 사용자 점수 저장 성공: ${message.author.username} (+${forumChannelConfig.score}점)`);
             return true;
         } catch (error) {
-            console.error('❌ 사용자 점수 직접 저장 중 오류:', error);
+            console.error('❌ 사용자 점수 저장 중 오류:', error);
             return false;
         }
+    }
+
+    /**
+     * @deprecated Use saveUserScore instead - both methods now do the same thing
+     */
+    async saveUserScoreDirect(message: Message, forumChannelConfig: ForumChannelConfig): Promise<boolean> {
+        // Delegate to the unified saveUserScore method
+        return this.saveUserScore(message, forumChannelConfig);
     }
 }

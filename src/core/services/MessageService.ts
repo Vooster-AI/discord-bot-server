@@ -1,5 +1,5 @@
 import { Client, Message, ChannelType } from 'discord.js';
-import { SyncService } from '../../services/supabaseSync/index.js';
+import { SyncService } from '../../services/database/syncService.js';
 import { GitHubSyncService } from '../../services/github/index.js';
 import { ScoreService } from './ScoreService.js';
 
@@ -35,20 +35,20 @@ export interface ForumConfig {
 export class MessageService {
     private forumChannelIds: string[];
     private config: ForumConfig;
-    private syncService: SyncService;
+    // SyncService is now static, no need for instance
     private githubService: GitHubSyncService;
     private scoreService: ScoreService;
 
     constructor(
         forumChannelIds: string[], 
         config: ForumConfig, 
-        syncService: SyncService, 
+        syncService: null, // Legacy parameter, not used
         githubService: GitHubSyncService,
         scoreService: ScoreService
     ) {
         this.forumChannelIds = forumChannelIds;
         this.config = config;
-        this.syncService = syncService;
+        // SyncService is now static, no need to store instance
         this.githubService = githubService;
         this.scoreService = scoreService;
     }
@@ -93,16 +93,31 @@ export class MessageService {
         // Supabase 동기화
         if (this.config.supabase?.enabled) {
             console.log(`💾 ${forumChannelConfig.table} 테이블에 Supabase 동기화 시도...`);
-            const syncSuccess = await this.syncService.syncForumPost(message as any, forumChannelConfig.table as any, false);
-            if (syncSuccess) {
+            try {
+                const syncData = {
+                    table: forumChannelConfig.table,
+                    messageData: {
+                        title: message.channel.isThread() ? message.channel.name : 'Message',
+                        content: message.content,
+                        details: {
+                            messageId: message.id,
+                            authorId: message.author.id,
+                            authorName: message.author.displayName || message.author.username,
+                            channelId: message.channel.id,
+                            createdAt: message.createdAt.toISOString()
+                        }
+                    }
+                };
+                
+                await SyncService.syncMessage(syncData);
                 console.log(`✅ ${forumChannelConfig.table} 테이블 Supabase 동기화 성공`);
                 
                 // 사용자 점수 저장 (Supabase 동기화가 성공한 경우에만)
                 if (forumChannelConfig.score !== 0) {
                     await this.scoreService.saveUserScore(message, forumChannelConfig);
                 }
-            } else {
-                console.log(`❌ ${forumChannelConfig.table} 테이블 Supabase 동기화 실패`);
+            } catch (error) {
+                console.log(`❌ ${forumChannelConfig.table} 테이블 Supabase 동기화 실패:`, error);
             }
         }
 

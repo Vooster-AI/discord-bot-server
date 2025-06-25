@@ -35,7 +35,7 @@ export class ReactionManager {
             if (threadName) {
                 issueNumber = await this.issueResolver.resolveIssueNumberWithName(threadId, threadName);
             } else {
-                issueNumber = this.mappingManager.getIssueNumber(threadId);
+                issueNumber = await this.mappingManager.getIssueNumber(threadId);
             }
 
             console.log(`🔍 [GITHUB DEBUG] 스레드 ${threadId}의 이슈 번호: ${issueNumber}`);
@@ -53,7 +53,7 @@ export class ReactionManager {
                 return false;
             }
 
-            const commentId = this.mappingManager.getCommentId(messageId);
+            const commentId = await this.mappingManager.getCommentId(messageId);
             let targetUrl: string;
             let targetType: string;
 

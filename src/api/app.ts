@@ -56,7 +56,7 @@ app.get('/health', (_, res) => {
 
 // Mount routers
 app.use('/api/users', usersRouter);
-app.use('/api/todo', todosRouter);
+app.use('/api/todos', todosRouter);
 app.use('/api/forums', forumsRouter);
 app.use('/api/sync', syncRouter);
 app.use('/api/github', githubRouter);
@@ -69,7 +69,7 @@ app.patch('/api/supabase/forums/:id', (req, res) => res.redirect(307, `/api/foru
 app.delete('/api/supabase/forums/:id', (req, res) => res.redirect(307, `/api/forums/supabase/${req.params.id}`));
 
 // Error handling middleware
-app.use((err: Error, req: Request, res: Response) => {
+app.use((err: Error, req: Request, res: Response, next: any) => {
     console.error('Unhandled error:', err);
     res.status(500).json({
         error: 'Internal server error',
