@@ -1,16 +1,12 @@
 import { Client, ChannelType, Message, MessageReaction, User, PartialMessage, PartialMessageReaction, PartialUser } from 'discord.js';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { SyncService } from '../../services/supabaseSync/index.js';
 import { GitHubSyncService } from '../../services/github/index.js';
 import { MessageSyncService } from '../../services/sync/messageSync.js';
 import { MessageService } from '../../core/services/MessageService.js';
 import { ReactionService } from '../../core/services/ReactionService.js';
 import { ScoreService } from '../../core/services/ScoreService.js';
+import { getForumConfig } from '../../shared/utils/configService.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 export interface ForumChannelConfig {
     id: string;
@@ -307,11 +303,11 @@ export class ForumMonitor {
 
     private async loadConfig(): Promise<void> {
         try {
-            const configPath = path.join(__dirname, '../../../forum-config.json');
-            const configData = fs.readFileSync(configPath, 'utf8');
-            this.config = JSON.parse(configData);
+            this.config = await getForumConfig();
+            console.log('✅ Supabase에서 포럼 설정을 성공적으로 로드했습니다.');
         } catch (error) {
-            console.error('❌ 포럼 설정 파일을 로드할 수 없습니다:', error);
+            console.error('❌ 포럼 설정을 로드할 수 없습니다:', error);
+            console.error('💡 Supabase Forums 테이블에 데이터가 있는지 확인하세요.');
             process.exit(1);
         }
     }
