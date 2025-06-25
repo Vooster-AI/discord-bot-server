@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Todo API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .complete-btn {
+            background-color: #28a745;
+        }
+        .complete-btn:hover {
+            background-color: #1e7e34;
+        }
+        .todo-item {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+        }
+        .todo-completed {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+        }
+        .result {
+            background-color: #e9ecef;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .error {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+            color: #721c24;
+        }
+        .success {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+            color: #155724;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        .status {
+            font-size: 20px;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Discord Bot Todo API 테스트</h1>
+
+    <!-- 서버 상태 확인 -->
+    <div class="container">
+        <h2>🔍 서버 상태 확인</h2>
+        <button onclick="checkHealth()">건강 상태 확인</button>
+        <button onclick="getStats()">서버 통계</button>
+        <div id="healthResult" class="result"></div>
+    </div>
+
+    <!-- Todo 생성 -->
+    <div class="container">
+        <h2>➕ 새 Todo 생성</h2>
+        <form onsubmit="createTodo(event)">
+            <div class="form-group">
+                <label for="taskName">작업명:</label>
+                <input type="text" id="taskName" required placeholder="예: 새로운 기능 개발">
+            </div>
+            <div class="form-group">
+                <label for="complexity">복잡도 (1-10):</label>
+                <input type="number" id="complexity" min="1" max="10" required placeholder="5">
+            </div>
+            <div class="form-group">
+                <label for="dueDate">마감일:</label>
+                <input type="date" id="dueDate" required>
+            </div>
+            <div class="form-group">
+                <label for="url">Discord 메시지 URL (필수):</label>
+                <input type="url" id="url" required placeholder="https://discord.com/channels/1234567890/1234567890/1234567890">
+                <small style="color: #666; font-size: 12px;">Discord에서 메시지 우클릭 → "메시지 링크 복사"</small>
+            </div>
+            <button type="submit">Todo 생성</button>
+        </form>
+        <div id="createResult" class="result"></div>
+    </div>
+
+    <!-- Todo 목록 조회 -->
+    <div class="container">
+        <h2>📋 Todo 목록</h2>
+        <button onclick="getTodos(false)">미완료 Todo</button>
+        <button onclick="getTodos(true)">완료된 Todo</button>
+        <button onclick="getTodos()">모든 Todo</button>
+        <div id="todoList"></div>
+        <div id="listResult" class="result"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000/api';
+
+        // 공통 API 호출 함수
+        async function apiCall(endpoint, method = 'GET', data = null) {
+            try {
+                const options = {
+                    method,
+                    headers: { 'Content-Type': 'application/json' }
+                };
+                
+                if (data) {
+                    options.body = JSON.stringify(data);
+                }
+                
+                const response = await fetch(`${API_BASE}${endpoint}`, options);
+                const result = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${JSON.stringify(result)}`);
+                }
+                
+                return result;
+            } catch (error) {
+                console.error('API 호출 실패:', error);
+                throw error;
+            }
+        }
+
+        // 건강 상태 확인
+        async function checkHealth() {
+            try {
+                const response = await fetch('http://localhost:3000/health');
+                const result = await response.json();
+                document.getElementById('healthResult').innerHTML = `✅ 서버 상태: ${JSON.stringify(result, null, 2)}`;
+                document.getElementById('healthResult').className = 'result success';
+            } catch (error) {
+                document.getElementById('healthResult').innerHTML = `❌ 오류: ${error.message}`;
+                document.getElementById('healthResult').className = 'result error';
+            }
+        }
+
+        // 서버 통계
+        async function getStats() {
+            try {
+                const result = await apiCall('/stats');
+                document.getElementById('healthResult').innerHTML = `📊 서버 통계: ${JSON.stringify(result, null, 2)}`;
+                document.getElementById('healthResult').className = 'result success';
+            } catch (error) {
+                document.getElementById('healthResult').innerHTML = `❌ 통계 조회 실패: ${error.message}`;
+                document.getElementById('healthResult').className = 'result error';
+            }
+        }
+
+        // Todo 생성
+        async function createTodo(event) {
+            event.preventDefault();
+            
+            const data = {
+                task_name: document.getElementById('taskName').value,
+                complexity: parseInt(document.getElementById('complexity').value),
+                due_date: document.getElementById('dueDate').value,
+                url: document.getElementById('url').value
+            };
+
+            try {
+                const result = await apiCall('/todo/create', 'POST', data);
+                document.getElementById('createResult').innerHTML = `✅ Todo 생성 성공: ${JSON.stringify(result, null, 2)}`;
+                document.getElementById('createResult').className = 'result success';
+                
+                // 폼 초기화
+                event.target.reset();
+                
+                // Todo 목록 새로고침
+                getTodos(false);
+            } catch (error) {
+                document.getElementById('createResult').innerHTML = `❌ Todo 생성 실패: ${error.message}`;
+                document.getElementById('createResult').className = 'result error';
+            }
+        }
+
+        // Todo 목록 조회
+        async function getTodos(completed = null) {
+            try {
+                let endpoint = '/todo?limit=50';
+                if (completed !== null) {
+                    endpoint += `&completed=${completed}`;
+                }
+                
+                const result = await apiCall(endpoint);
+                
+                // Todo 목록 표시
+                const todoListDiv = document.getElementById('todoList');
+                todoListDiv.innerHTML = '';
+                
+                const todos = result.tasks || result || [];
+                
+                if (todos.length === 0) {
+                    todoListDiv.innerHTML = '<p>Todo가 없습니다.</p>';
+                } else {
+                    todos.forEach(todo => {
+                        const todoDiv = document.createElement('div');
+                        todoDiv.className = `todo-item ${todo.completed ? 'todo-completed' : ''}`;
+                        
+                        todoDiv.innerHTML = `
+                            <div>
+                                <span class="status">${todo.completed ? '✅' : '👀'}</span>
+                                <strong>${todo.task_name}</strong>
+                                <span style="float: right;">복잡도: ${todo.complexity}</span>
+                            </div>
+                            <div style="margin-top: 5px; font-size: 12px; color: #666;">
+                                마감일: ${todo.due_date} | 생성일: ${new Date(todo.created_at).toLocaleString('ko-KR')}
+                                ${todo.url ? ` | <a href="${todo.url}" target="_blank">링크</a>` : ''}
+                            </div>
+                            ${!todo.completed ? `<button class="complete-btn" onclick="completeTodo('${todo.id}')">완료 처리</button>` : ''}
+                        `;
+                        
+                        todoListDiv.appendChild(todoDiv);
+                    });
+                }
+                
+                document.getElementById('listResult').innerHTML = `📋 조회 결과: ${todos.length}개의 Todo`;
+                document.getElementById('listResult').className = 'result success';
+            } catch (error) {
+                document.getElementById('listResult').innerHTML = `❌ Todo 목록 조회 실패: ${error.message}`;
+                document.getElementById('listResult').className = 'result error';
+            }
+        }
+
+        // Todo 완료 처리
+        async function completeTodo(todoId) {
+            try {
+                const result = await apiCall(`/todo/${todoId}/complete`, 'POST');
+                alert(`✅ Todo 완료 처리됨! Discord에서 👀 이모지가 ✅ 로 변경됩니다.`);
+                
+                // Todo 목록 새로고침
+                getTodos(false);
+            } catch (error) {
+                alert(`❌ Todo 완료 처리 실패: ${error.message}`);
+            }
+        }
+
+        // 페이지 로드 시 초기 데이터 로드
+        window.onload = function() {
+            // 오늘 날짜를 기본값으로 설정
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('dueDate').value = today;
+            
+            // 서버 상태 확인
+            checkHealth();
+            
+            // 미완료 Todo 목록 로드
+            getTodos(false);
+        };
+    </script>
+</body>
+</html>/

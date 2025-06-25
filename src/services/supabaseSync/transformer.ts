@@ -7,7 +7,10 @@ export class DataTransformer {
             content: message.content,
             created_at: message.createdAt.toISOString(),
             details: {
-                authorName: message.author.displayName || message.author.username,
+                authorName: message.author.discriminator && message.author.discriminator !== '0' 
+                    ? `${message.author.username}#${message.author.discriminator}`
+                    : message.author.username,
+                authorDisplayName: message.author.displayName || null,
                 authorId: message.author.id,
                 postId: message.channel.id,
                 messageId: message.id,
@@ -27,7 +30,10 @@ export class DataTransformer {
             content: message.content,
             created_at: message.createdAt.toISOString(),
             details: {
-                authorName: message.author.displayName || message.author.username,
+                authorName: message.author.discriminator && message.author.discriminator !== '0' 
+                    ? `${message.author.username}#${message.author.discriminator}`
+                    : message.author.username,
+                authorDisplayName: message.author.displayName || null,
                 authorId: message.author.id,
                 postId: message.channel.id,
                 messageId: message.id,

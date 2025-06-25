@@ -65,6 +65,7 @@ export interface DiscordMessage {
         readonly id: string;
         readonly username: string;
         readonly displayName?: string;
+        readonly discriminator?: string;
     };
     readonly channel: {
         readonly id: string;

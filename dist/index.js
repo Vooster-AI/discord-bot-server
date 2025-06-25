@@ -1,5 +1,5 @@
-import { startDiscordBot } from './login.js';
-import { app } from './server/app.js';
+import { startDiscordBot } from './bot/login.js';
+import { app } from './api/app.js';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 import { fileURLToPath } from 'url';

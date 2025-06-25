@@ -1,6 +1,0 @@
-{
-  "type": "module",
-  "devDependencies": {
-    "@types/dotenv": "^6.1.1"
-  }
-}

@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SyncService } from '../services/supabaseSync/index.js';
-import { GitHubSyncService } from '../services/githubSync/index.js';
+import { GitHubSyncService } from '../services/github/index.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 export class ForumMonitor {

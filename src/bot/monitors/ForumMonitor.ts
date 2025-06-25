@@ -1,0 +1,371 @@
+import { Client, ChannelType, Message, MessageReaction, User, PartialMessage, PartialMessageReaction, PartialUser } from 'discord.js';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { SyncService } from '../../services/supabaseSync/index.js';
+import { GitHubSyncService } from '../../services/github/index.js';
+import { MessageSyncService } from '../../services/sync/messageSync.js';
+import { MessageService } from '../../core/services/MessageService.js';
+import { ReactionService } from '../../core/services/ReactionService.js';
+import { ScoreService } from '../../core/services/ScoreService.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+export interface ForumChannelConfig {
+    id: string;
+    name: string;
+    table: string;
+    score: number;
+    github_sync?: boolean;
+}
+
+export interface ForumConfig {
+    monitoring: {
+        enabled: boolean;
+        forumChannels: ForumChannelConfig[];
+    };
+    settings: {
+        maxMessageLength: number;
+        checkDelay: number;
+    };
+    supabase?: {
+        enabled: boolean;
+        serverUrl: string;
+    };
+    github?: {
+        enabled: boolean;
+        token?: string;
+        owner?: string;
+        repo?: string;
+    };
+}
+
+/**
+ * Refactored Forum Monitor with separated concerns
+ * Now delegates responsibilities to specific services
+ */
+export class ForumMonitor {
+    private client: Client;
+    private config: ForumConfig = null as any;
+    private forumChannelIds: string[];
+    
+    // Core services
+    private syncService: SyncService;
+    private githubService: GitHubSyncService;
+    private messageSyncService: MessageSyncService;
+    
+    // Refactored services
+    private messageService: MessageService;
+    private reactionService: ReactionService;
+    private scoreService: ScoreService;
+
+    constructor(client: Client) {
+        this.client = client;
+        this.forumChannelIds = [];
+        this.messageSyncService = new MessageSyncService();
+        this.init();
+    }
+
+    private async init() {
+        await this.loadConfig();
+        this.forumChannelIds = this.config.monitoring.forumChannels.map(channel => channel.id);
+        
+        // Initialize services
+        this.syncService = new SyncService(this.config.supabase?.serverUrl || 'http://localhost:3000');
+        this.githubService = new GitHubSyncService({
+            enabled: this.config.github?.enabled || false
+        }, this.client);
+        
+        this.scoreService = new ScoreService(this.config.supabase?.serverUrl || 'http://localhost:3000');
+        this.messageService = new MessageService(
+            this.forumChannelIds, 
+            this.config, 
+            this.syncService, 
+            this.githubService,
+            this.scoreService
+        );
+        this.reactionService = new ReactionService(this.forumChannelIds, this.config, this.githubService);
+
+        this.setupEventListeners();
+        this.logInitialization();
+    }
+
+    private setupEventListeners() {
+        // 메시지 생성 이벤트
+        this.client.on('messageCreate', async (message: Message) => {
+            if (message.author.bot) {
+                await this.messageService.handleBotMessage(message);
+            } else {
+                await this.messageService.handleMessage(message);
+            }
+        });
+
+        // 스레드 생성 이벤트 (새 포럼 포스트)
+        this.client.on('threadCreate', async (thread) => {
+            await this.handleThreadCreate(thread);
+        });
+
+        // 스레드 업데이트 이벤트 (포스트 상태 변경)
+        this.client.on('threadUpdate', async (oldThread, newThread) => {
+            await this.handleThreadUpdate(oldThread, newThread);
+        });
+
+        // 메시지 삭제 이벤트
+        this.client.on('messageDelete', async (message) => {
+            await this.handleMessageDelete(message);
+        });
+
+        // 반응 추가 이벤트
+        this.client.on('messageReactionAdd', async (reaction, user) => {
+            await this.reactionService.handleReactionAdd(reaction, user);
+        });
+
+        // 반응 제거 이벤트
+        this.client.on('messageReactionRemove', async (reaction, user) => {
+            await this.reactionService.handleReactionRemove(reaction, user);
+        });
+    }
+
+    private async handleThreadCreate(thread: any) {
+        // 새로운 포럼 포스트(스레드) 생성 감지
+        if (thread.parent && this.forumChannelIds.includes(thread.parent.id)) {
+            const forumChannelConfig = this.config.monitoring.forumChannels.find(ch => ch.id === thread.parent.id);
+            const timestamp = new Date().toLocaleString('ko-KR');
+            
+            console.log(`\n🆕 [${timestamp}] 새 포럼 포스트 생성!`);
+            console.log(`📋 포럼: ${forumChannelConfig?.name || thread.parent.name} (${thread.parent.id})`);
+            console.log(`📝 포스트 제목: ${thread.name}`);
+            console.log(`🔗 포스트 링크: https://discord.com/channels/${thread.guild.id}/${thread.id}`);
+            console.log(`⏳ ${this.config.settings.checkDelay}ms 후 첫 메시지 확인...`);
+            
+            // 잠시 대기 후 첫 번째 메시지 가져오기
+            setTimeout(async () => {
+                try {
+                    const messages = await thread.messages.fetch({ limit: 1 });
+                    const firstMessage = messages.first();
+                    if (firstMessage) {
+                        console.log(`✅ 첫 메시지 발견 - 작성자: ${firstMessage.author.displayName || firstMessage.author.username}`);
+                        
+                        await this.processNewPost(firstMessage, forumChannelConfig);
+                    } else {
+                        console.log(`❌ 첫 메시지를 찾을 수 없음`);
+                    }
+                } catch (error) {
+                    console.error('❌ Error fetching thread messages:', error);
+                }
+            }, this.config.settings.checkDelay);
+        }
+    }
+
+    private async processNewPost(firstMessage: Message, forumChannelConfig: ForumChannelConfig | undefined) {
+        if (!forumChannelConfig) return;
+
+        // Supabase 동기화 (새 포스트)
+        if (this.config.supabase?.enabled) {
+            console.log(`💾 ${forumChannelConfig.table} 테이블에 새 포스트 Supabase 동기화 시도...`);
+            const syncSuccess = await this.syncService.syncForumPost(firstMessage as any, forumChannelConfig.table as any, true);
+            if (syncSuccess) {
+                console.log(`✅ ${forumChannelConfig.table} 테이블 새 포스트 Supabase 동기화 성공`);
+            } else {
+                console.log(`❌ ${forumChannelConfig.table} 테이블 새 포스트 Supabase 동기화 실패`);
+            }
+        }
+
+        // GitHub 동기화 (새 이슈)
+        if (this.config.github?.enabled && forumChannelConfig?.github_sync) {
+            console.log(`🐙 GitHub 이슈 생성 시도...`);
+            
+            const result = await this.githubService.createIssueForNewPost(firstMessage, forumChannelConfig.name);
+            if (result) {
+                console.log(`✅ GitHub 이슈 생성 성공: ${result}`);
+                
+                // 이슈 번호를 스레드의 첫 메시지에 반응으로 추가
+                try {
+                    await firstMessage.react('🐙');
+                } catch (reactionError) {
+                    console.log('⚠️  GitHub 이슈 생성 반응 추가 실패:', reactionError);
+                }
+            } else {
+                console.error(`❌ GitHub 이슈 생성 실패`);
+            }
+        }
+        
+        this.messageService['logAlert'](firstMessage, true);
+    }
+
+    private async handleThreadUpdate(oldThread: any, newThread: any) {
+        try {
+            // 포럼 채널의 스레드인지 확인
+            if (newThread.parent && this.forumChannelIds.includes(newThread.parent.id)) {
+                const forumChannelConfig = this.config.monitoring.forumChannels.find(ch => ch.id === newThread.parent.id);
+                const timestamp = new Date().toLocaleString('ko-KR');
+                
+                // 스레드가 잠겼거나 아카이브된 경우 (포스트 종료)
+                if ((newThread.locked && !oldThread.locked) || (newThread.archived && !oldThread.archived)) {
+                    console.log(`\n🔒 [${timestamp}] 포럼 포스트 종료 감지!`);
+                    console.log(`📋 포럼: ${forumChannelConfig?.name} (${newThread.parent.id})`);
+                    console.log(`📝 포스트: ${newThread.name} (${newThread.id})`);
+                    console.log(`🔒 상태: ${newThread.locked ? '잠김' : ''} ${newThread.archived ? '아카이브됨' : ''}`);
+                    
+                    // GitHub 이슈 종료 동기화
+                    if (this.config.github?.enabled && forumChannelConfig?.github_sync) {
+                        console.log(`🐙 GitHub 이슈 종료 동기화 시도...`);
+                        
+                        const issueNumber = await this.githubService.ensureIssueExists(newThread.id, newThread.name, forumChannelConfig.name);
+                        
+                        if (issueNumber) {
+                            const result = await this.githubService.closeIssueForClosedPost(newThread.id, '포스트가 종료되었습니다.');
+                            if (result) {
+                                console.log(`✅ GitHub 이슈 종료 성공`);
+                            } else {
+                                console.log(`❌ GitHub 이슈 종료 실패`);
+                            }
+                        } else {
+                            console.log(`❌ GitHub 이슈를 찾거나 생성할 수 없음`);
+                        }
+                    }
+                }
+                
+                // 스레드가 다시 열린 경우 (포스트 재개)
+                if ((!newThread.locked && oldThread.locked) || (!newThread.archived && oldThread.archived)) {
+                    console.log(`\n🔓 [${timestamp}] 포럼 포스트 재개 감지!`);
+                    console.log(`📋 포럼: ${forumChannelConfig?.name} (${newThread.parent.id})`);
+                    console.log(`📝 포스트: ${newThread.name} (${newThread.id})`);
+                    console.log(`🔓 상태: ${!newThread.locked ? '잠금 해제' : ''} ${!newThread.archived ? '아카이브 해제' : ''}`);
+                    
+                    // GitHub 이슈 다시 열기 동기화
+                    if (this.config.github?.enabled && forumChannelConfig?.github_sync) {
+                        console.log(`🐙 GitHub 이슈 재개 동기화 시도...`);
+                        
+                        const issueNumber = await this.githubService.ensureIssueExists(newThread.id, newThread.name, forumChannelConfig.name);
+                        
+                        if (issueNumber) {
+                            const result = await this.githubService.reopenIssueForReopenedPost(newThread.id, '포스트가 다시 열렸습니다.');
+                            if (result) {
+                                console.log(`✅ GitHub 이슈 재개 성공`);
+                            } else {
+                                console.log(`❌ GitHub 이슈 재개 실패`);
+                            }
+                        } else {
+                            console.log(`❌ GitHub 이슈를 찾거나 생성할 수 없음`);
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('❌ 스레드 업데이트 처리 중 오류:', error);
+        }
+    }
+
+    private async handleMessageDelete(message: Message | PartialMessage) {
+        // 부분 메시지인 경우 처리
+        if (message.partial) {
+            try {
+                await message.fetch();
+            } catch (error) {
+                console.error('❌ 삭제된 메시지 정보를 가져올 수 없음:', error);
+            }
+        }
+
+        // DM이나 봇 메시지는 무시
+        if (!message.guild || message.author?.bot) return;
+
+        // 포럼 채널의 스레드에서 온 메시지인지 확인
+        if (message.channel?.type === ChannelType.PublicThread && message.channel.parent) {
+            const parentChannel = message.channel.parent;
+            
+            if (this.forumChannelIds.includes(parentChannel.id)) {
+                const forumChannelConfig = this.config.monitoring.forumChannels.find(ch => ch.id === parentChannel.id);
+                const timestamp = new Date().toLocaleString('ko-KR');
+                
+                console.log(`\n🗑️ [${timestamp}] 포럼 메시지 삭제 감지!`);
+                console.log(`📋 포럼: ${forumChannelConfig?.name || parentChannel.name} (${parentChannel.id})`);
+                console.log(`📝 포스트: ${message.channel.name}`);
+                console.log(`👤 작성자: ${message.author?.displayName || message.author?.username} (${message.author?.id})`);
+                console.log(`🆔 메시지 ID: ${message.id}`);
+                
+                if (forumChannelConfig) {
+                    const syncOptions = {
+                        enableScoring: !!(this.config.supabase?.enabled && forumChannelConfig.score !== 0),
+                        enableGitHubSync: !!(this.config.github?.enabled && forumChannelConfig.github_sync === true),
+                        channelScore: Math.abs(forumChannelConfig.score)
+                    };
+
+                    console.log(`🔄 메시지 삭제 처리 시작...`);
+                    const result = await this.messageSyncService.handleMessageDelete(message, syncOptions);
+                    
+                    if (result.success) {
+                        console.log(`✅ 메시지 삭제 처리 완료`);
+                    } else {
+                        console.error(`❌ 메시지 삭제 처리 실패: ${result.error}`);
+                    }
+                }
+            }
+        }
+    }
+
+    private async loadConfig(): Promise<void> {
+        try {
+            const configPath = path.join(__dirname, '../../../forum-config.json');
+            const configData = fs.readFileSync(configPath, 'utf8');
+            this.config = JSON.parse(configData);
+        } catch (error) {
+            console.error('❌ 포럼 설정 파일을 로드할 수 없습니다:', error);
+            process.exit(1);
+        }
+    }
+
+    private logInitialization(): void {
+        console.log('\\n🔧 포럼 모니터링 시스템 초기화 완료');
+        console.log(`📊 모니터링 상태: ${this.config.monitoring.enabled ? '활성화' : '비활성화'}`);
+        console.log(`📋 모니터링 채널 수: ${this.config.monitoring.forumChannels.length}개`);
+        
+        this.config.monitoring.forumChannels.forEach((channel, index) => {
+            console.log(`  ${index + 1}. ${channel.name} (${channel.id})`);
+        });
+        
+        console.log(`⚙️  설정: 메시지 최대 길이 ${this.config.settings.maxMessageLength}자, 체크 지연 ${this.config.settings.checkDelay}ms`);
+        
+        const supabaseStatus = this.config.supabase?.enabled ? '활성화' : '비활성화';
+        console.log(`💾 Supabase 동기화: ${supabaseStatus}`);
+        if (this.config.supabase?.enabled) {
+            console.log(`🔗 서버 URL: ${this.config.supabase.serverUrl}`);
+            this.syncService.setEnabled(true);
+            this.syncService.testConnection();
+        } else {
+            this.syncService.setEnabled(false);
+        }
+
+        const githubStatus = this.config.github?.enabled ? '활성화' : '비활성화';
+        console.log(`🐙 GitHub 동기화: ${githubStatus}`);
+        if (this.config.github?.enabled) {
+            console.log(`🔗 GitHub 설정:`, this.config.github);
+            this.githubService.testConnection();
+        }
+    }
+
+    public setWebhookCallback() {
+        console.log('👂 포럼 활동 모니터링 시작...\\n');
+    }
+
+    public getMonitoredChannels(): string[] {
+        return this.forumChannelIds;
+    }
+
+    public getConfig(): ForumConfig {
+        return this.config;
+    }
+
+    public addForumChannel(channelId: string) {
+        if (!this.forumChannelIds.includes(channelId)) {
+            this.forumChannelIds.push(channelId);
+        }
+    }
+
+    public removeForumChannel(channelId: string) {
+        this.forumChannelIds = this.forumChannelIds.filter(id => id !== channelId);
+    }
+}
+
+export default ForumMonitor;

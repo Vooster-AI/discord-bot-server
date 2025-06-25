@@ -6,7 +6,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -42,20 +42,20 @@ model ForumPost {
   id              String @id
   title           String
   content         String?
-  authorId        String
-  authorName      String
-  authorAvatar    String?
+  authorId        String // Discord user ID
+  userId          String // FK to User table
   channelId       String
   guildId         String
   messageCount    Int @default(1)
   isLocked        Boolean @default(false)
   isPinned        Boolean @default(false)
-  tags            String[]
+  tags            String? // JSON string for SQLite compatibility
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   lastMessageAt   DateTime @default(now())
   
   channel         ForumChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user            User @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages        ForumMessage[]
   
   @@map("forum_posts")
@@ -64,9 +64,8 @@ model ForumPost {
 model ForumMessage {
   id            String @id
   content       String
-  authorId      String
-  authorName    String
-  authorAvatar  String?
+  authorId      String // Discord user ID
+  userId        String // FK to User table
   postId        String
   guildId       String
   editedAt      DateTime?
@@ -74,8 +73,68 @@ model ForumMessage {
   updatedAt     DateTime @updatedAt
   
   post          ForumPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user          User @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   @@map("forum_messages")
+}
+
+model User {
+  id           String @id @default(uuid())
+  discordId    String @unique
+  username     String
+  displayName  String?
+  avatarUrl    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  forumPosts    ForumPost[]
+  forumMessages ForumMessage[]
+  scoreHistory  ScoreHistory[]
+  
+  @@map("users")
+}
+
+model ScoreHistory {
+  id             String @id @default(uuid())
+  userId         String
+  score          Int
+  postName       String?
+  messageContent String?
+  messageLink    String?
+  scoredAt       DateTime
+  createdAt      DateTime @default(now())
+  
+  user           User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("score_history")
+}
+
+model Task {
+  id             String @id @default(uuid())
+  taskName       String
+  complexity     Int
+  dueDate        DateTime
+  url            String // Discord URL
+  threadId       String // Discord thread ID
+  channelId      String // Discord channel ID
+  guildId        String // Discord guild ID
+  status         String @default("pending") // pending, completed, cancelled
+  completedAt    DateTime? // When task was completed
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  @@map("tasks")
+}
+
+model ForumConfig {
+  id             String @id @default(uuid())
+  key            String @unique
+  value          String // Changed from Json to String for SQLite
+  description    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  @@map("forum_configs")
 }
 
 model SyncLog {
