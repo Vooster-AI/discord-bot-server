@@ -23,36 +23,15 @@ prisma/dev.db-journal
 prisma/migrations/
 /src/generated/prisma
 
-# Data storage files (GitHub mappings, etc.)
-/data/
+# Data storage files
 data/
 
 # Logs
 logs/
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Runtime data
-pids/
-*.pid
-*.seed
-*.pid.lock
-
-# Coverage directory used by tools like istanbul
-coverage/
-*.lcov
-
-# nyc test coverage
-.nyc_output/
-
-# Instrumentation
-lib-cov/
 
 # OS generated files
-.DS_Store
-.DS_Store?
+**/.DS_Store
 ._*
 .Spotlight-V100
 .Trashes
@@ -65,16 +44,13 @@ Thumbs.db
 *.swp
 *.swo
 *~
-.project
-.classpath
-.c9/
-*.launch
-.settings/
 *.sublime-workspace
 
 # Temporary files
 *.tmp
 *.temp
+tmp/
+temp/
 .cache/
 
 # Backup files
@@ -84,53 +60,13 @@ Thumbs.db
 # ESLint cache
 .eslintcache
 
-# Optional npm cache directory
+# Package manager files
 .npm
-
-# Optional REPL history
-.node_repl_history
-
-# Output of 'npm pack'
-*.tgz
-
-# Yarn Integrity file
 .yarn-integrity
-
-# dotenv environment variables file
-.env.test
-
-# parcel-bundler cache (https://parceljs.org/)
-.parcel-cache
-
-# Next.js build output
-.next
-
-# Nuxt.js build / generate output
-.nuxt
-dist
-
-# Gatsby files
-.cache/
-public
-
-# Storybook build outputs
-.out
-.storybook-out
-
-# Temporary folders
-tmp/
-temp/
+*.tgz
+.node_repl_history
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
 *.sw?
-
-# Examples folder is preserved for development
-# examples/ folder should be included in git
