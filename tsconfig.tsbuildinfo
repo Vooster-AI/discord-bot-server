@@ -1,1 +1,0 @@
-{"root":["./src/index.ts","./src/command/command.ts","./src/command/list/hi.ts","./src/command/list/level_check.ts","./src/forum/forum.ts","./src/server/app.ts","./src/services/syncservice.ts"],"version":"5.8.3"}

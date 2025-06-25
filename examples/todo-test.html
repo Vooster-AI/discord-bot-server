@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Todo API 테스트</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        .todo-item {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+        }
+        .todo-completed {
+            background-color: #d4edda;
+            text-decoration: line-through;
+        }
+        .complexity {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .complexity-low { background-color: #28a745; }
+        .complexity-medium { background-color: #ffc107; }
+        .complexity-high { background-color: #dc3545; }
+    </style>
+</head>
+<body>
+    <h1>🚀 Discord Bot Todo API 테스트</h1>
+    
+    <!-- Todo 생성 폼 -->
+    <div class="container">
+        <h2>📝 새 Todo 생성</h2>
+        <form id="createTodoForm">
+            <div class="form-group">
+                <label for="taskName">작업 이름:</label>
+                <input type="text" id="taskName" required placeholder="예: 버그 수정하기">
+            </div>
+            
+            <div class="form-group">
+                <label for="complexity">복잡도 (1-10):</label>
+                <select id="complexity" required>
+                    <option value="">선택하세요</option>
+                    <option value="1">1 - 매우 쉬움</option>
+                    <option value="2">2 - 쉬움</option>
+                    <option value="3">3 - 약간 쉬움</option>
+                    <option value="4">4 - 보통 이하</option>
+                    <option value="5">5 - 보통</option>
+                    <option value="6">6 - 보통 이상</option>
+                    <option value="7">7 - 약간 어려움</option>
+                    <option value="8">8 - 어려움</option>
+                    <option value="9">9 - 매우 어려움</option>
+                    <option value="10">10 - 극도로 어려움</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="dueDate">마감일:</label>
+                <input type="date" id="dueDate" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="discordUrl">Discord 메시지 URL:</label>
+                <input type="url" id="discordUrl" required 
+                       placeholder="https://discord.com/channels/123/456/789">
+                <small>Discord에서 메시지 링크 복사해서 붙여넣기</small>
+            </div>
+            
+            <button type="submit">Todo 생성</button>
+        </form>
+        
+        <div id="createResult"></div>
+    </div>
+
+    <!-- Todo 목록 -->
+    <div class="container">
+        <h2>📋 Todo 목록</h2>
+        <div>
+            <button onclick="loadTodos()">전체 목록 새로고침</button>
+            <button onclick="loadTodos(false)">미완료만 보기</button>
+            <button onclick="loadTodos(true)">완료된 것만 보기</button>
+        </div>
+        <div id="todoList"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000/api';
+
+        // Todo 생성
+        document.getElementById('createTodoForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const taskName = document.getElementById('taskName').value;
+            const complexity = parseInt(document.getElementById('complexity').value);
+            const dueDate = document.getElementById('dueDate').value;
+            const url = document.getElementById('discordUrl').value;
+            
+            try {
+                const response = await fetch(`${API_BASE}/todos/create`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        task_name: taskName,
+                        complexity: complexity,
+                        due_date: dueDate,
+                        url: url
+                    })
+                });
+                
+                const result = await response.json();
+                const resultDiv = document.getElementById('createResult');
+                
+                if (result.success) {
+                    resultDiv.innerHTML = `<div class="success">✅ Todo가 성공적으로 생성되었습니다!</div>`;
+                    document.getElementById('createTodoForm').reset();
+                    loadTodos(); // 목록 새로고침
+                } else {
+                    resultDiv.innerHTML = `<div class="error">❌ 오류: ${result.error}</div>`;
+                }
+            } catch (error) {
+                document.getElementById('createResult').innerHTML = `<div class="error">❌ 네트워크 오류: ${error.message}</div>`;
+            }
+        });
+
+        // Todo 목록 로드
+        async function loadTodos(completed = null) {
+            try {
+                let url = `${API_BASE}/todos`;
+                const params = new URLSearchParams();
+                if (completed !== null) {
+                    params.append('completed', completed.toString());
+                }
+                if (params.toString()) {
+                    url += '?' + params.toString();
+                }
+                
+                const response = await fetch(url);
+                const result = await response.json();
+                
+                const todoList = document.getElementById('todoList');
+                
+                if (result.success && result.tasks) {
+                    if (result.tasks.length === 0) {
+                        todoList.innerHTML = '<p>📭 Todo가 없습니다.</p>';
+                        return;
+                    }
+                    
+                    todoList.innerHTML = result.tasks.map(todo => `
+                        <div class="todo-item ${todo.completed ? 'todo-completed' : ''}">
+                            <h4>${todo.task_name}</h4>
+                            <p><strong>복잡도:</strong> <span class="complexity ${getComplexityClass(todo.complexity)}">${todo.complexity}</span></p>
+                            <p><strong>마감일:</strong> ${todo.due_date}</p>
+                            <p><strong>생성일:</strong> ${new Date(todo.created_at).toLocaleString('ko-KR')}</p>
+                            <p><strong>상태:</strong> ${todo.completed ? '✅ 완료' : '⏳ 진행중'}</p>
+                            ${todo.post_url ? `<p><strong>링크:</strong> <a href="${todo.post_url}" target="_blank">Discord 메시지 보기</a></p>` : ''}
+                            ${!todo.completed ? `<button onclick="completeTodo('${todo.id}')">완료 처리</button>` : ''}
+                        </div>
+                    `).join('');
+                } else {
+                    todoList.innerHTML = `<div class="error">❌ Todo 목록을 불러올 수 없습니다: ${result.error}</div>`;
+                }
+            } catch (error) {
+                document.getElementById('todoList').innerHTML = `<div class="error">❌ 네트워크 오류: ${error.message}</div>`;
+            }
+        }
+
+        // Todo 완료 처리
+        async function completeTodo(todoId) {
+            try {
+                const response = await fetch(`${API_BASE}/todos/${todoId}/complete`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('✅ Todo가 완료 처리되었습니다!');
+                    loadTodos(); // 목록 새로고침
+                } else {
+                    alert(`❌ 오류: ${result.error}`);
+                }
+            } catch (error) {
+                alert(`❌ 네트워크 오류: ${error.message}`);
+            }
+        }
+
+        // 복잡도에 따른 CSS 클래스
+        function getComplexityClass(complexity) {
+            if (complexity <= 3) return 'complexity-low';
+            if (complexity <= 7) return 'complexity-medium';
+            return 'complexity-high';
+        }
+
+        // 페이지 로드 시 Todo 목록 자동 로드
+        window.addEventListener('load', function() {
+            // 오늘 날짜를 기본값으로 설정
+            document.getElementById('dueDate').valueAsDate = new Date();
+            loadTodos();
+        });
+    </script>
+</body>
+</html>
