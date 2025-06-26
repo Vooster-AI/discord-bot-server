@@ -20,6 +20,10 @@ export class IssueResolver {
         this.issueSearchProvider = issueSearchProvider;
     }
 
+    public setDiscordClient(discordClient: Client): void {
+        this.discordClient = discordClient;
+    }
+
     public async resolveIssueNumber(threadId: string): Promise<number | undefined> {
         // First try to get from memory/storage
         let issueNumber = this.mappingManager.getIssueNumber(threadId);

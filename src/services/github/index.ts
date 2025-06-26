@@ -7,6 +7,7 @@ import { GitHubConfig } from './types.js';
 import { Message, Client } from 'discord.js';
 
 export class GitHubSyncService {
+    private static instance: GitHubSyncService | null = null;
     private config: GitHubConfig;
     private client: GitHubClient;
     private mappingManager: MappingManager;
@@ -15,7 +16,7 @@ export class GitHubSyncService {
     private reactionManager: ReactionManager;
     private discordClient?: Client;
 
-    constructor(config: GitHubConfig, discordClient?: Client) {
+    private constructor(config: GitHubConfig, discordClient?: Client) {
         this.config = config;
         this.client = new GitHubClient();
         this.mappingManager = new MappingManager();
@@ -30,6 +31,27 @@ export class GitHubSyncService {
         if (config.enabled && !this.client.validateCredentials()) {
             console.warn('⚠️ GitHub 동기화가 활성화되었지만 GITHUB_TOKEN 또는 GITHUB_REPOSITORY 환경변수가 설정되지 않았습니다.');
             this.config.enabled = false;
+        }
+    }
+
+    public static getInstance(config?: GitHubConfig, discordClient?: Client): GitHubSyncService {
+        if (!GitHubSyncService.instance) {
+            if (!config) {
+                throw new Error('GitHubSyncService의 첫 번째 인스턴스 생성시 config가 필요합니다.');
+            }
+            GitHubSyncService.instance = new GitHubSyncService(config, discordClient);
+        } else if (config) {
+            // 기존 인스턴스가 있는 경우 설정 업데이트
+            GitHubSyncService.instance.updateConfig(config, discordClient);
+        }
+        return GitHubSyncService.instance;
+    }
+
+    private updateConfig(config: GitHubConfig, discordClient?: Client): void {
+        this.config = { ...this.config, ...config };
+        if (discordClient) {
+            this.discordClient = discordClient;
+            this.issueManager.setDiscordClient(discordClient);
         }
     }
 

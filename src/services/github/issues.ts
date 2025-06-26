@@ -23,6 +23,11 @@ export class IssueManager {
         this.commentManager = commentManager;
     }
 
+    public setDiscordClient(discordClient: Client): void {
+        this.discordClient = discordClient;
+        this.issueResolver.setDiscordClient(discordClient);
+    }
+
     public async createIssueForNewPost(message: Message, forumChannelName: string): Promise<string | null> {
         try {
             if (!message.guild || !message.channel) {

@@ -38,7 +38,7 @@ export class ForumMonitor {
         
         // Initialize services - SyncService is now static
         // SyncService is now static, no need to instantiate
-        this.githubService = new GitHubSyncService({
+        this.githubService = GitHubSyncService.getInstance({
             enabled: this.config.github?.enabled || false
         }, this.client);
         

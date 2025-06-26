@@ -13,7 +13,7 @@ export class MessageSyncService {
     private githubService: GitHubSyncService;
 
     constructor() {
-        this.githubService = new GitHubSyncService({
+        this.githubService = GitHubSyncService.getInstance({
             enabled: true // MessageSync에서는 활성화 상태로 생성
         });
     }
