@@ -4,6 +4,10 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { ForumMonitor } from './monitors/ForumMonitor.js';
 
+interface ExtendedClient extends Client {
+    forumMonitor?: ForumMonitor;
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -43,7 +47,7 @@ export class DiscordBot {
         try {
             // Initialize forum monitor
             this.forumMonitor = new ForumMonitor(this.client);
-            (this.client as any).forumMonitor = this.forumMonitor;
+            (this.client as ExtendedClient).forumMonitor = this.forumMonitor;
 
             console.log('✅ Discord bot services initialized');
         } catch (error) {

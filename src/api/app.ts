@@ -1,4 +1,4 @@
-import express, { Request, Response } from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
@@ -69,7 +69,8 @@ app.patch('/api/supabase/forums/:id', (req, res) => res.redirect(307, `/api/foru
 app.delete('/api/supabase/forums/:id', (req, res) => res.redirect(307, `/api/forums/supabase/${req.params.id}`));
 
 // Error handling middleware
-app.use((err: Error, req: Request, res: Response, next: any) => {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
+app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
     console.error('Unhandled error:', err);
     res.status(500).json({
         error: 'Internal server error',

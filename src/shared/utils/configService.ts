@@ -1,15 +1,5 @@
 import { supabase } from './supabase.js';
-
-export interface ForumChannelConfig {
-  id: string;
-  name: string;
-  table: string;
-  score: number;
-  enabled?: boolean;
-  channel_id?: string;
-  todo?: boolean;
-  github_sync?: boolean;
-}
+import { ForumChannelConfig } from '../types/common.js';
 
 export async function getForumChannelsFromSupabase(): Promise<ForumChannelConfig[]> {
   try {

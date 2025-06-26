@@ -1,33 +1,9 @@
 import { Client, Message, ChannelType } from 'discord.js';
 import { SyncService } from '../../services/database/syncService.js';
 import { GitHubSyncService } from '../../services/github/index.js';
-import { ScoreService } from './ScoreService.js';
-
-export interface ForumChannelConfig {
-    id: string;
-    name: string;
-    table: string;
-    score: number;
-    github_sync?: boolean;
-}
-
-export interface ForumConfig {
-    monitoring: {
-        enabled: boolean;
-        forumChannels: ForumChannelConfig[];
-    };
-    settings: {
-        maxMessageLength: number;
-        checkDelay: number;
-    };
-    supabase?: {
-        enabled: boolean;
-        serverUrl: string;
-    };
-    github?: {
-        enabled: boolean;
-    };
-}
+import { UserService } from './UserService.js';
+import { getDiscordFullName } from '../../shared/utils/discordHelpers.js';
+import { ForumChannelConfig, ForumConfig } from '../../shared/types/common.js';
 
 /**
  * Service responsible for handling Discord messages and their synchronization
@@ -37,20 +13,17 @@ export class MessageService {
     private config: ForumConfig;
     // SyncService is now static, no need for instance
     private githubService: GitHubSyncService;
-    private scoreService: ScoreService;
 
     constructor(
         forumChannelIds: string[], 
         config: ForumConfig, 
         syncService: null, // Legacy parameter, not used
-        githubService: GitHubSyncService,
-        scoreService: ScoreService
+        githubService: GitHubSyncService
     ) {
         this.forumChannelIds = forumChannelIds;
         this.config = config;
         // SyncService is now static, no need to store instance
         this.githubService = githubService;
-        this.scoreService = scoreService;
     }
 
     /**
@@ -114,7 +87,21 @@ export class MessageService {
                 
                 // 사용자 점수 저장 (Supabase 동기화가 성공한 경우에만)
                 if (forumChannelConfig.score !== 0) {
-                    await this.scoreService.saveUserScore(message, forumChannelConfig);
+                    const userData = {
+                        discord_id: message.author.id,
+                        name: getDiscordFullName(message.author),
+                        avatar_url: message.author.displayAvatarURL(),
+                        score: forumChannelConfig.score,
+                        scored_at: new Date().toISOString(),
+                        scored_by: {
+                            post_name: (message.channel as any).name || 'Unknown',
+                            message_content: message.content.length > 500 ? message.content.substring(0, 500) + '...' : message.content,
+                            message_link: `https://discord.com/channels/${message.guild?.id}/${message.channel.id}/${message.id}`
+                        }
+                    };
+                    
+                    await UserService.createOrUpdateUserScore(userData);
+                    console.log(`✅ 사용자 점수 저장 성공: ${message.author.username} (+${forumChannelConfig.score}점)`);
                 }
             } catch (error) {
                 console.log(`❌ ${forumChannelConfig.table} 테이블 Supabase 동기화 실패:`, error);

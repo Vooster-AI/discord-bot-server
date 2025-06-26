@@ -20,48 +20,22 @@ router.post('/supabase', asyncHandler(async (req, res) => {
             return res.status(400).json({ error: 'Invalid table name. Only Suggestions is supported.' });
         }
 
-        // Process user first to get user ID
-        let userId = null;
+        // Process user first using UserService
+        let userId: string | null = null;
         if (data.details && data.details.authorId && data.details.authorName) {
             const discordId = data.details.authorId.toString();
             const fullName = data.details.authorName;
-            // Extract username from authorName (format: username#discriminator or just username)
             const username = fullName.includes('#') ? fullName.split('#')[0] : fullName;
             const nickname = data.details.authorDisplayName || null;
             
             try {
-                // Get or create user in Users table
-                let { data: existingUser, error: selectError } = await supabase
-                    .from('Users')
-                    .select('*')
-                    .eq('discord_id', discordId)
-                    .single();
-
-                if (selectError && selectError.code !== 'PGRST116') {
-                    console.error('Error checking existing user:', selectError);
-                } else if (!existingUser) {
-                    // Create new user
-                    const { data: newUser, error: insertError } = await supabase
-                        .from('Users')
-                        .insert({
-                            discord_id: discordId,
-                            nickname: nickname,
-                            username: username,
-                            score: 0
-                        })
-                        .select()
-                        .single();
-                        
-                    if (insertError) {
-                        console.error('Error creating user:', insertError);
-                    } else {
-                        console.log(`✅ User created: ${username} (${discordId})`);
-                        userId = newUser.id;
-                    }
-                } else {
-                    console.log(`✅ User exists: ${username} (${discordId})`);
-                    userId = existingUser.id;
-                }
+                const user = await UserService.getOrCreateUser({
+                    discordId,
+                    username,
+                    displayName: nickname
+                });
+                userId = user.id;
+                console.log(`✅ User processed: ${username} (${discordId})`);
             } catch (userError) {
                 console.error('❌ Error processing user:', userError);
             }
@@ -143,48 +117,22 @@ router.post('/post', asyncHandler(async (req, res) => {
             return res.status(400).json({ error: 'Invalid table name. Only Suggestions is supported.' });
         }
 
-        // Process user first to get user ID
-        let userId = null;
+        // Process user first using UserService
+        let userId: string | null = null;
         if (postData.details && postData.details.authorId && postData.details.authorName) {
             const discordId = postData.details.authorId.toString();
             const fullName = postData.details.authorName;
-            // Extract username from authorName (format: username#discriminator or just username)
             const username = fullName.includes('#') ? fullName.split('#')[0] : fullName;
             const nickname = postData.details.authorDisplayName || null;
             
             try {
-                // Get or create user in Users table
-                let { data: existingUser, error: selectError } = await supabase
-                    .from('Users')
-                    .select('*')
-                    .eq('discord_id', discordId)
-                    .single();
-
-                if (selectError && selectError.code !== 'PGRST116') {
-                    console.error('Error checking existing user:', selectError);
-                } else if (!existingUser) {
-                    // Create new user
-                    const { data: newUser, error: insertError } = await supabase
-                        .from('Users')
-                        .insert({
-                            discord_id: discordId,
-                            nickname: nickname,
-                            username: username,
-                            score: 0
-                        })
-                        .select()
-                        .single();
-                        
-                    if (insertError) {
-                        console.error('Error creating user:', insertError);
-                    } else {
-                        console.log(`✅ User created for post: ${username} (${discordId})`);
-                        userId = newUser.id;
-                    }
-                } else {
-                    console.log(`✅ User exists for post: ${username} (${discordId})`);
-                    userId = existingUser.id;
-                }
+                const user = await UserService.getOrCreateUser({
+                    discordId,
+                    username,
+                    displayName: nickname
+                });
+                userId = user.id;
+                console.log(`✅ User processed for post: ${username} (${discordId})`);
             } catch (userError) {
                 console.error('❌ Error processing user for post:', userError);
             }
@@ -264,7 +212,7 @@ router.post('/message', asyncHandler(async (req, res) => {
         }
 
         // Process user first to get user ID
-        let userId = null;
+        let userId: string | null = null;
         if (messageData.details && messageData.details.authorId && messageData.details.authorName) {
             const discordId = messageData.details.authorId.toString();
             const fullName = messageData.details.authorName;
@@ -273,38 +221,13 @@ router.post('/message', asyncHandler(async (req, res) => {
             const nickname = messageData.details.authorDisplayName || null;
             
             try {
-                // Get or create user in Users table
-                let { data: existingUser, error: selectError } = await supabase
-                    .from('Users')
-                    .select('*')
-                    .eq('discord_id', discordId)
-                    .single();
-
-                if (selectError && selectError.code !== 'PGRST116') {
-                    console.error('Error checking existing user:', selectError);
-                } else if (!existingUser) {
-                    // Create new user
-                    const { data: newUser, error: insertError } = await supabase
-                        .from('Users')
-                        .insert({
-                            discord_id: discordId,
-                            nickname: nickname,
-                            username: username,
-                            score: 0
-                        })
-                        .select()
-                        .single();
-                        
-                    if (insertError) {
-                        console.error('Error creating user:', insertError);
-                    } else {
-                        console.log(`✅ User created for message: ${username} (${discordId})`);
-                        userId = newUser.id;
-                    }
-                } else {
-                    console.log(`✅ User exists for message: ${username} (${discordId})`);
-                    userId = existingUser.id;
-                }
+                const user = await UserService.getOrCreateUser({
+                    discordId,
+                    username,
+                    displayName: nickname
+                });
+                userId = user.id;
+                console.log(`✅ User processed for message: ${username} (${discordId})`);
             } catch (userError) {
                 console.error('❌ Error processing user for message:', userError);
             }

@@ -1,24 +1,7 @@
 import { Client, MessageReaction, User, PartialMessageReaction, PartialUser, ChannelType } from 'discord.js';
 import { GitHubSyncService } from '../../services/github/index.js';
 import { getDiscordFullName } from '../../shared/utils/discordHelpers.js';
-
-export interface ForumChannelConfig {
-    id: string;
-    name: string;
-    table: string;
-    score: number;
-    github_sync?: boolean;
-}
-
-export interface ForumConfig {
-    monitoring: {
-        enabled: boolean;
-        forumChannels: ForumChannelConfig[];
-    };
-    github?: {
-        enabled: boolean;
-    };
-}
+import { ForumChannelConfig, ForumConfig } from '../../shared/types/common.js';
 
 /**
  * Service responsible for handling Discord reactions and GitHub sync

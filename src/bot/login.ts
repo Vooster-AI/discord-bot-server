@@ -2,6 +2,10 @@ import { Client, GatewayIntentBits, Partials } from 'discord.js';
 // import { CommandHandler } from './commands/Command.js'; // TODO: Implement command handler
 import { ForumMonitor } from './monitors/ForumMonitor.js';
 import { setDiscordClient } from '../api/app.js';
+
+interface ExtendedClient extends Client {
+    forumMonitor?: ForumMonitor;
+}
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
@@ -42,7 +46,7 @@ export function createDiscordClient() {
 
             // ForumMonitor 초기화
             forumMonitor = new ForumMonitor(client);
-            (client as any).forumMonitor = forumMonitor;
+            (client as ExtendedClient).forumMonitor = forumMonitor;
 
             // Express 서버에 Discord 클라이언트 설정
             await setDiscordClient(client);

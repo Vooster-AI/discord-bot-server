@@ -1,21 +1,7 @@
 import { supabase } from '../../shared/utils/supabase.js';
 import { CreateUserRequest, UserResponse } from '../../shared/types/api.js';
+import { CreateUserData, ScoreData } from '../../shared/types/common.js';
 import { ensureDiscordIdString } from '../../api/middlewares/validation.js';
-
-export interface CreateUserData {
-  discordId: string;
-  username: string;
-  displayName?: string;
-  avatarUrl?: string;
-}
-
-export interface ScoreData {
-  score: number;
-  postName?: string;
-  messageContent?: string;
-  messageLink?: string;
-  scoredAt: Date;
-}
 
 /**
  * Unified User Service that handles both Prisma and Supabase operations
@@ -143,6 +129,64 @@ export class UserService {
       console.log(`✅ Added score ${scoreData.score} to user ${discordId}`);
     } catch (error) {
       console.error('❌ Error adding score to user:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Reduce score from user using Supabase only
+   */
+  static async reduceScoreFromUser(discordId: string, scoreReduction: number, reason: string, messageLink?: string): Promise<void> {
+    try {
+      // Get current user data
+      const { data: existingUser, error: selectError } = await supabase
+        .from('Users')
+        .select('*')
+        .eq('discord_id::text', discordId)
+        .single();
+
+      if (selectError) {
+        if (selectError.code === 'PGRST116') {
+          throw new Error('User not found in database');
+        }
+        throw new Error(`Failed to find user: ${selectError.message}`);
+      }
+
+      const currentScore = existingUser.score || 0;
+      const newScore = Math.max(0, currentScore - scoreReduction);
+
+      // Update user with reduced score
+      const { error: updateError } = await supabase
+        .from('Users')
+        .update({
+          score: newScore
+        })
+        .eq('discord_id::text', discordId);
+
+      if (updateError) {
+        throw new Error(`Score reduction failed: ${updateError.message}`);
+      }
+
+      // Log the score change in Logs table
+      const { error: logError } = await supabase
+        .from('Logs')
+        .insert({
+          user: existingUser.id,
+          score_change: -scoreReduction,
+          score: newScore,
+          action: reason,
+          message_link: messageLink,
+          changed_at: new Date().toISOString()
+        });
+
+      if (logError) {
+        console.error('❌ Error logging score reduction:', logError);
+        // Don't fail the request if logging fails
+      }
+
+      console.log(`✅ Reduced score ${scoreReduction} from user ${discordId} (${currentScore} -> ${newScore})`);
+    } catch (error) {
+      console.error('❌ Error reducing score from user:', error);
       throw error;
     }
   }

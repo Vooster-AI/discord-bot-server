@@ -1,6 +1,6 @@
 import { supabase } from '../../shared/utils/supabase.js';
 import { UserService } from '../../core/services/UserService.js';
-import { SyncRequest, SyncPostRequest, SyncMessageRequest } from '../../shared/types/api.js';
+import { SyncPostRequest, SyncMessageRequest } from '../../shared/types/api.js';
 import { ensureDiscordIdString } from '../../api/middlewares/validation.js';
 
 export class SyncService {
@@ -63,25 +63,6 @@ export class SyncService {
         return { processedData };
     }
 
-    static async syncToSupabase(syncData: SyncRequest): Promise<any> {
-        this.validateTable(syncData.table);
-        
-        const { processedData } = await this.processUserData(syncData.data);
-
-        // Insert data into Supabase
-        const { data: result, error } = await supabase
-            .from(syncData.table)
-            .insert(processedData)
-            .select();
-
-        if (error) {
-            console.error(`Error inserting into ${syncData.table}:`, error);
-            throw new Error(`${error.message}: ${error.details}`);
-        }
-
-        console.log(`✅ Successfully inserted into ${syncData.table}:`, result);
-        return result;
-    }
 
     static async syncPost(syncData: SyncPostRequest): Promise<any> {
         this.validateTable(syncData.table);

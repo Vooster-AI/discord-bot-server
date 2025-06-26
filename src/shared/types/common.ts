@@ -27,6 +27,9 @@ export interface ForumChannelConfig {
     table: string;
     score: number;
     github_sync?: boolean;
+    enabled?: boolean;
+    channel_id?: string;
+    todo?: boolean;
 }
 
 export interface ForumConfig {

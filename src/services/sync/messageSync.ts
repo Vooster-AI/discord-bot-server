@@ -1,6 +1,6 @@
 import { Message, PartialMessage } from 'discord.js';
-import { supabase } from '../../shared/utils/supabase.js';
 import { GitHubSyncService } from '../github/index.js';
+import { UserService } from '../../core/services/UserService.js';
 import { getDiscordFullName } from '../../shared/utils/discordHelpers.js';
 
 export interface MessageSyncOptions {
@@ -85,65 +85,20 @@ export class MessageSyncService {
             const discordId = message.author.id.toString();
             const username = getDiscordFullName(message.author);
 
-            // Get existing user
-            const { data: existingUser, error: selectError } = await supabase
-                .from('Users')
-                .select('*')
-                .eq('discord_id', discordId)
-                .single();
-
-            if (selectError && selectError.code !== 'PGRST116') {
-                console.error('Error checking existing user:', selectError);
-                return { success: false, error: 'Database error while checking user' };
-            }
-
-            if (!existingUser) {
-                // User doesn't exist, can't reduce score
-                return { success: false, error: 'User not found in database' };
-            }
-
-            // Calculate new score (ensure it doesn't go below 0)
-            const currentScore = existingUser.score || 0;
-            const newScore = Math.max(0, currentScore - scoreReduction);
-
-            // Update user's score
-            const { error: updateError } = await supabase
-                .from('Users')
-                .update({ score: newScore })
-                .eq('id', existingUser.id);
-
-            if (updateError) {
-                console.error('Error updating user score:', updateError);
-                return { success: false, error: 'Failed to update user score' };
-            }
-
-            // Log the score change
+            // Generate message link for logging
             const messageLink = message.guild && message.channel?.id && message.id 
                 ? `https://discord.com/channels/${message.guild.id}/${message.channel.id}/${message.id}`
-                : null;
-                
-            const { error: logError } = await supabase
-                .from('Logs')
-                .insert({
-                    user: existingUser.id,
-                    score_change: -scoreReduction, // Negative for reduction
-                    score: newScore,
-                    action: 'message_deleted',
-                    channel: message.channel?.id?.toString() || null,
-                    post: null,
-                    content: message.content || null,
-                    message_link: messageLink,
-                    changed_at: new Date().toISOString()
-                });
+                : undefined;
 
-            if (logError) {
-                console.error('❌ Error logging score change:', logError);
-                // Don't fail the request if logging fails
-            } else {
-                console.log(`📝 Score reduction logged for user: ${username}`);
-            }
+            // Use UserService to reduce score
+            await UserService.reduceScoreFromUser(
+                discordId, 
+                scoreReduction, 
+                'message_deleted', 
+                messageLink
+            );
 
-            console.log(`📉 User score updated: ${username} (${currentScore} - ${scoreReduction} = ${newScore})`);
+            console.log(`📉 User score reduced: ${username} (-${scoreReduction})`);
             return { success: true };
         } catch (error) {
             console.error('❌ Error reducing user score:', error);

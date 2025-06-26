@@ -4,38 +4,8 @@ import { GitHubSyncService } from '../../services/github/index.js';
 import { MessageSyncService } from '../../services/sync/messageSync.js';
 import { MessageService } from '../../core/services/MessageService.js';
 import { ReactionService } from '../../core/services/ReactionService.js';
-import { ScoreService } from '../../core/services/ScoreService.js';
 import { getForumConfig } from '../../shared/utils/configService.js';
-
-
-export interface ForumChannelConfig {
-    id: string;
-    name: string;
-    table: string;
-    score: number;
-    github_sync?: boolean;
-}
-
-export interface ForumConfig {
-    monitoring: {
-        enabled: boolean;
-        forumChannels: ForumChannelConfig[];
-    };
-    settings: {
-        maxMessageLength: number;
-        checkDelay: number;
-    };
-    supabase?: {
-        enabled: boolean;
-        serverUrl: string;
-    };
-    github?: {
-        enabled: boolean;
-        token?: string;
-        owner?: string;
-        repo?: string;
-    };
-}
+import { ForumChannelConfig, ForumConfig } from '../../shared/types/common.js';
 
 /**
  * Refactored Forum Monitor with separated concerns
@@ -54,7 +24,6 @@ export class ForumMonitor {
     // Refactored services
     private messageService: MessageService;
     private reactionService: ReactionService;
-    private scoreService: ScoreService;
 
     constructor(client: Client) {
         this.client = client;
@@ -73,13 +42,11 @@ export class ForumMonitor {
             enabled: this.config.github?.enabled || false
         }, this.client);
         
-        this.scoreService = new ScoreService(this.config.supabase?.serverUrl || 'http://localhost:3000');
         this.messageService = new MessageService(
             this.forumChannelIds, 
             this.config, 
             null, // syncService is now static, pass null
-            this.githubService,
-            this.scoreService
+            this.githubService
         );
         this.reactionService = new ReactionService(this.forumChannelIds, this.config, this.githubService);
 
