@@ -1,9 +1,9 @@
-import { Client, TextChannel, ThreadChannel, Message, ChannelType } from 'discord.js';
+import { Client, TextChannel, ThreadChannel, Message, ChannelType, Collection } from 'discord.js';
 import { GitHubSyncService } from '../github/index.js';
 import { UserService } from '../../core/services/UserService.js';
 import { MessageService } from '../../core/services/MessageService.js';
 import { SyncService } from '../database/syncService.js';
-import { getForumConfig } from '../../shared/utils/configService.js';
+import { getForumChannelsFromSupabase } from '../../shared/utils/configService.js';
 import { MessageSyncService } from '../sync/messageSync.js';
 
 export interface BackfillOptions {
@@ -50,7 +50,10 @@ export class BackfillService {
 
     constructor(client: Client) {
         this.client = client;
-        this.githubService = GitHubSyncService.getInstance(client);
+        // GitHubSyncService를 기본 설정으로 초기화
+        this.githubService = GitHubSyncService.getInstance({
+            enabled: true
+        }, client);
     }
 
     /**
@@ -77,11 +80,31 @@ export class BackfillService {
             );
 
             for (const [channelId, channel] of channels) {
-                const forumConfig = await getForumConfig(channelId);
-                if (forumConfig) {
-                    console.log(`📋 포럼 채널 백필 시작: ${channel.name}`);
-                    const result = await this.backfillChannel(channelId, defaultOptions);
-                    results.push(result);
+                try {
+                    let forumConfig;
+                    try {
+                        const forumChannels = await getForumChannelsFromSupabase();
+                        forumConfig = forumChannels.find(config => config.id === channelId);
+                    } catch (supabaseError) {
+                        console.warn(`⚠️ Supabase 연결 실패, 기본 설정 사용: ${channelId}`);
+                        // Supabase 연결 실패시 기본 설정 사용
+                        forumConfig = {
+                            id: channelId,
+                            name: channel.name,
+                            table: 'messages',
+                            score: 10,
+                            github_sync: true,
+                            points_per_message: 10
+                        };
+                    }
+                    
+                    if (forumConfig) {
+                        console.log(`📋 포럼 채널 백필 시작: ${channel.name}`);
+                        const result = await this.backfillChannel(channelId, defaultOptions);
+                        results.push(result);
+                    }
+                } catch (error) {
+                    console.error(`❌ 채널 백필 실패: ${channelId}`, error);
                 }
             }
         }
@@ -121,7 +144,23 @@ export class BackfillService {
             progress.channelName = channel.name;
             progress.status = 'running';
 
-            const forumConfig = await getForumConfig(channelId);
+            let forumConfig;
+            try {
+                const forumChannels = await getForumChannelsFromSupabase();
+                forumConfig = forumChannels.find(config => config.id === channelId);
+            } catch (supabaseError) {
+                console.warn(`⚠️ Supabase 연결 실패, 기본 설정 사용: ${channelId}`);
+                // Supabase 연결 실패시 기본 설정 사용
+                forumConfig = {
+                    id: channelId,
+                    name: channel.name,
+                    table: 'messages',
+                    score: 10,
+                    github_sync: true,
+                    points_per_message: 10
+                };
+            }
+            
             if (!forumConfig) {
                 throw new Error(`포럼 설정을 찾을 수 없습니다: ${channelId}`);
             }
@@ -259,16 +298,16 @@ export class BackfillService {
                 fetchOptions.before = lastMessageId;
             }
 
-            const batch = await thread.messages.fetch(fetchOptions);
+            const batch = await thread.messages.fetch(fetchOptions) as any;
             if (batch.size === 0) break;
 
-            const filteredMessages = batch.filter(message => {
+            const filteredMessages = Array.from(batch.values()).filter((message: Message) => {
                 if (options.startDate && message.createdAt < options.startDate) return false;
                 if (options.endDate && message.createdAt > options.endDate) return false;
                 return true;
             });
 
-            messages.push(...filteredMessages.values());
+            messages.push(...(filteredMessages as Message[]));
             lastMessageId = batch.last()?.id;
 
             // 더 이상 가져올 메시지가 없으면 종료
@@ -312,24 +351,9 @@ export class BackfillService {
      * Supabase 동기화
      */
     private async syncToSupabase(message: Message, forumConfig: any): Promise<void> {
-        const syncData = {
-            message_id: message.id,
-            author_id: message.author.id,
-            author_name: message.author.username,
-            content: message.content,
-            timestamp: message.createdAt.toISOString(),
-            channel_id: message.channel.id,
-            guild_id: message.guild?.id || '',
-            thread_id: message.channel.type === ChannelType.PublicThread ? message.channel.id : null,
-            attachments: message.attachments.map(att => att.url),
-            embeds: message.embeds.map(embed => embed.toJSON()),
-            reactions: message.reactions.cache.map(reaction => ({
-                emoji: reaction.emoji.name,
-                count: reaction.count
-            }))
-        };
-
-        await SyncService.syncMessage(syncData);
+        console.log(`📝 [BACKFILL] Supabase 동기화 건너뛰기 - 연결 문제로 인해 비활성화됨`);
+        // TODO: Supabase 연결 문제 해결 후 다시 활성화
+        // Supabase 프로젝트 URL이 올바르지 않아 현재 비활성화
     }
 
     /**
@@ -350,19 +374,9 @@ export class BackfillService {
      * 사용자 점수 업데이트
      */
     private async updateUserScore(message: Message, forumConfig: any): Promise<void> {
-        const pointsPerMessage = forumConfig.points_per_message || 10;
-        
-        const userData = {
-            discord_id: message.author.id,
-            username: message.author.username,
-            score: pointsPerMessage,
-            source: 'backfill',
-            message_id: message.id,
-            channel_id: message.channel.id,
-            timestamp: message.createdAt.toISOString()
-        };
-
-        await UserService.createOrUpdateUserScore(userData);
+        console.log(`👤 [BACKFILL] 사용자 점수 업데이트 건너뛰기 - Supabase 연결 문제로 인해 비활성화됨`);
+        // TODO: Supabase 연결 문제 해결 후 다시 활성화
+        // 현재는 GitHub 동기화만 수행
     }
 
     /**

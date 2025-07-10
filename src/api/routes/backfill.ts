@@ -28,7 +28,7 @@ router.post('/all', asyncHandler(async (req, res) => {
 
     try {
         const results = await backfillService.backfillAllChannels(options);
-        res.json({
+        return res.json({
             success: true,
             message: '모든 채널 백필이 완료되었습니다.',
             results: results.map(result => ({
@@ -40,7 +40,7 @@ router.post('/all', asyncHandler(async (req, res) => {
             }))
         });
     } catch (error) {
-        res.status(500).json({
+        return res.status(500).json({
             success: false,
             error: error instanceof Error ? error.message : '백필 중 오류가 발생했습니다.'
         });
@@ -72,7 +72,7 @@ router.post('/channel/:channelId', asyncHandler(async (req, res) => {
 
     try {
         const result = await backfillService.backfillChannel(channelId, options);
-        res.json({
+        return res.json({
             success: result.success,
             message: result.success ? '채널 백필이 완료되었습니다.' : '채널 백필 중 오류가 발생했습니다.',
             result: {
@@ -85,7 +85,7 @@ router.post('/channel/:channelId', asyncHandler(async (req, res) => {
             }
         });
     } catch (error) {
-        res.status(500).json({
+        return res.status(500).json({
             success: false,
             error: error instanceof Error ? error.message : '백필 중 오류가 발생했습니다.'
         });
@@ -111,7 +111,7 @@ router.get('/progress/:jobId', asyncHandler(async (req, res) => {
         return res.status(404).json({ error: '백필 작업을 찾을 수 없습니다.' });
     }
 
-    res.json({
+    return res.json({
         success: true,
         progress: {
             jobId: progress.jobId,
@@ -144,7 +144,7 @@ router.get('/jobs', asyncHandler(async (req, res) => {
     const backfillService = new BackfillService(client);
     const jobs = backfillService.getAllActiveJobs();
     
-    res.json({
+    return res.json({
         success: true,
         jobs: jobs.map(job => ({
             jobId: job.jobId,
@@ -177,12 +177,12 @@ router.delete('/jobs/:jobId', asyncHandler(async (req, res) => {
     const cancelled = backfillService.cancelBackfill(jobId);
     
     if (cancelled) {
-        res.json({
+        return res.json({
             success: true,
             message: '백필 작업이 취소되었습니다.'
         });
     } else {
-        res.status(404).json({
+        return res.status(404).json({
             success: false,
             error: '취소할 수 있는 백필 작업을 찾을 수 없습니다.'
         });
