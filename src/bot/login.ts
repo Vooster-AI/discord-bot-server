@@ -2,9 +2,11 @@ import { Client, GatewayIntentBits, Partials } from 'discord.js';
 // import { CommandHandler } from './commands/Command.js'; // TODO: Implement command handler
 import { ForumMonitor } from './monitors/ForumMonitor.js';
 import { setDiscordClient } from '../api/app.js';
+import { BackfillService } from '../services/backfill/index.js';
 
 interface ExtendedClient extends Client {
     forumMonitor?: ForumMonitor;
+    backfillService?: BackfillService;
 }
 import * as dotenv from 'dotenv';
 import * as path from 'path';
@@ -35,6 +37,7 @@ export function createDiscordClient() {
 
     // let commandHandler: CommandHandler; // TODO: Implement command handler
     let forumMonitor: ForumMonitor;
+    let backfillService: BackfillService;
 
     // 준비 이벤트 핸들러
     client.on('ready', async () => {
@@ -48,17 +51,38 @@ export function createDiscordClient() {
             forumMonitor = new ForumMonitor(client);
             (client as ExtendedClient).forumMonitor = forumMonitor;
 
+            // BackfillService 초기화
+            backfillService = new BackfillService(client);
+            (client as ExtendedClient).backfillService = backfillService;
+
             // Express 서버에 Discord 클라이언트 설정
             await setDiscordClient(client);
             console.log('✅ Express 서버에 Discord 클라이언트 연결 완료');
 
             // ForumMonitor가 완전히 초기화될 때까지 잠시 대기
-            setTimeout(() => {
+            setTimeout(async () => {
                 const monitoredChannels = forumMonitor.getMonitoredChannels();
                 if (monitoredChannels) {
                     console.log(`모니터링 중인 채널: ${monitoredChannels.length}개`);
                 }
-            }, 1000);
+
+                // 백필 실행 (선택사항 - 환경 변수로 제어)
+                if (process.env.AUTO_BACKFILL === 'true') {
+                    console.log('🔄 자동 백필 시작...');
+                    try {
+                        const results = await backfillService.backfillAllChannels({
+                            batchSize: 20,
+                            delay: 500,
+                            syncToGitHub: true,
+                            syncToSupabase: true,
+                            updateScores: true
+                        });
+                        console.log(`✅ 자동 백필 완료: ${results.length}개 채널 처리`);
+                    } catch (error) {
+                        console.error('❌ 자동 백필 실패:', error);
+                    }
+                }
+            }, 2000);
         } catch (error) {
             console.error('❌ Discord 클라이언트 초기화 중 오류:', error);
         }

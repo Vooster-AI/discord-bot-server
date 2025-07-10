@@ -14,6 +14,7 @@ import forumsRouter from './routes/forums.js';
 import syncRouter from './routes/sync.js';
 import githubRouter from './routes/github.js';
 import apiRouter from './routes/api.js';
+import { backfillRouter } from './routes/backfill.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -60,6 +61,7 @@ app.use('/api/todos', todosRouter);
 app.use('/api/forums', forumsRouter);
 app.use('/api/sync', syncRouter);
 app.use('/api/github', githubRouter);
+app.use('/api/backfill', backfillRouter);
 app.use('/api', apiRouter);
 
 // Legacy endpoint redirects for backward compatibility
